@@ -12,15 +12,74 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Dark mode disabled for consistent readability
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
 }
+*/
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Fix input text colors for better readability */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+textarea,
+select {
+  color: rgb(17 24 39);
+  background-color: white;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgb(156 163 175);
+}
+
+/* Ensure proper contrast for disabled inputs */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background-color: rgb(243 244 246);
+  color: rgb(75 85 99);
+  cursor: not-allowed;
+}
+
+/* Fix checkbox and radio button styles */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: rgb(59 130 246);
+}
+
+/* Focus styles for better visibility */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid rgb(59 130 246);
+  outline-offset: 1px;
+}
+
+/* Animation for modal fade in */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-in-out;
 }
