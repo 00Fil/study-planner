@@ -1,28 +1,22 @@
 import { WeeklyPlan, Exam, Subject, PomodoroSession, StudyStats, Topic, Homework } from './types'
 import { createClient } from './supabase/client'
-import { createServerSupabaseClient } from './supabase/server'
 
-// Helper to get the right client based on environment
-async function getSupabaseClient() {
-  if (typeof window !== 'undefined') {
-    // Client-side
-    return createClient()
-  } else {
-    // Server-side
-    return await createServerSupabaseClient()
-  }
+// Helper to get the right client - always use client for now
+// Server-side operations should be handled in API routes or server components
+function getSupabaseClient() {
+  return createClient()
 }
 
 // Helper to get current user
 async function getCurrentUser() {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   return user
 }
 
 // Weekly Plans
 export const getWeeklyPlans = async (): Promise<WeeklyPlan[]> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return []
 
@@ -41,7 +35,7 @@ export const getWeeklyPlans = async (): Promise<WeeklyPlan[]> => {
 }
 
 export const saveWeeklyPlan = async (plan: WeeklyPlan): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -59,7 +53,7 @@ export const saveWeeklyPlan = async (plan: WeeklyPlan): Promise<void> => {
 }
 
 export const getCurrentWeekPlan = async (): Promise<WeeklyPlan | null> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return null
 
@@ -84,7 +78,7 @@ export const getCurrentWeekPlan = async (): Promise<WeeklyPlan | null> => {
 
 // Exams
 export const getExams = async (): Promise<Exam[]> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return []
 
@@ -103,7 +97,7 @@ export const getExams = async (): Promise<Exam[]> => {
 }
 
 export const saveExam = async (exam: Exam): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -121,7 +115,7 @@ export const saveExam = async (exam: Exam): Promise<void> => {
 }
 
 export const deleteExam = async (examId: string): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -139,7 +133,7 @@ export const deleteExam = async (examId: string): Promise<void> => {
 
 // Subjects
 export const getSubjects = async (): Promise<Subject[]> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return getDefaultSubjects()
 
@@ -167,7 +161,7 @@ export const getSubjects = async (): Promise<Subject[]> => {
 }
 
 export const saveSubject = async (subject: Subject): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -185,7 +179,7 @@ export const saveSubject = async (subject: Subject): Promise<void> => {
 }
 
 export const deleteSubject = async (subjectName: string): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -214,7 +208,7 @@ export const deleteSubject = async (subjectName: string): Promise<void> => {
 
 // Topics
 export const getTopics = async (): Promise<Topic[]> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return []
 
@@ -233,7 +227,7 @@ export const getTopics = async (): Promise<Topic[]> => {
 }
 
 export const getTopicsBySubject = async (subjectName: string): Promise<Topic[]> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return []
 
@@ -253,7 +247,7 @@ export const getTopicsBySubject = async (subjectName: string): Promise<Topic[]> 
 }
 
 export const saveTopic = async (topic: Topic): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -282,7 +276,7 @@ export const saveTopic = async (topic: Topic): Promise<void> => {
 }
 
 export const deleteTopic = async (topicId: string): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -299,7 +293,7 @@ export const deleteTopic = async (topicId: string): Promise<void> => {
 }
 
 export const markTopicsForExam = async (topicIds: string[], examId: string): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -331,7 +325,7 @@ export const markTopicsForExam = async (topicIds: string[], examId: string): Pro
 }
 
 export const unmarkTopicsForExam = async (topicIds: string[], examId: string): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -361,7 +355,7 @@ export const unmarkTopicsForExam = async (topicIds: string[], examId: string): P
 
 // Homework
 export const getHomework = async (): Promise<Homework[]> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return []
 
@@ -380,7 +374,7 @@ export const getHomework = async (): Promise<Homework[]> => {
 }
 
 export const saveHomework = async (homework: Homework): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -412,7 +406,7 @@ export const saveHomework = async (homework: Homework): Promise<void> => {
 }
 
 export const deleteHomework = async (homeworkId: string): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -430,7 +424,7 @@ export const deleteHomework = async (homeworkId: string): Promise<void> => {
 
 // Pomodoro Sessions
 export const getPomodoroSessions = async (): Promise<PomodoroSession[]> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return []
 
@@ -450,7 +444,7 @@ export const getPomodoroSessions = async (): Promise<PomodoroSession[]> => {
 }
 
 export const savePomodoroSession = async (session: PomodoroSession): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -469,7 +463,7 @@ export const savePomodoroSession = async (session: PomodoroSession): Promise<voi
 
 // Study Stats
 export const getStudyStats = async (): Promise<StudyStats[]> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return []
 
@@ -489,7 +483,7 @@ export const getStudyStats = async (): Promise<StudyStats[]> => {
 }
 
 export const saveStudyStats = async (stats: StudyStats): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -508,7 +502,7 @@ export const saveStudyStats = async (stats: StudyStats): Promise<void> => {
 
 // Preferences
 export const getPreferences = async () => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) return null
 
@@ -527,7 +521,7 @@ export const getPreferences = async () => {
 }
 
 export const savePreferences = async (preferences: any): Promise<void> => {
-  const supabase = await getSupabaseClient()
+  const supabase = getSupabaseClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
