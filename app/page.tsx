@@ -18,13 +18,21 @@ import {
   Sparkles,
   Brain,
   ChevronRight,
-  Cloud
+  Cloud,
+  AlertTriangle,
+  ClipboardList,
+  Timer,
+  Activity,
+  ArrowRight,
+  Bell,
+  Users,
+  Coffee
 } from 'lucide-react';
 import Link from 'next/link';
-import { getExams, getStudyStats, getCurrentWeekPlan, getSubjects, getTopics } from '@/lib/storage';
+import { getExams, getStudyStats, getCurrentWeekPlan, getSubjects, getTopics, getHomework } from '@/lib/storage';
 import { getCurrentLesson, getNextLesson, getTodayLessons, getOptimalStudyPlan } from '@/lib/schedule-helpers';
 import { formatDate, getDaysUntilExam, formatTime } from '@/lib/utils';
-import { Exam, StudyStats, WeeklyPlan, Subject, Topic } from '@/lib/types';
+import { Exam, StudyStats, WeeklyPlan, Subject, Topic, Homework } from '@/lib/types';
 
 // Interfaccia per Smart Plan
 interface StudySlot {
@@ -46,6 +54,7 @@ interface SmartDayPlan {
 export default function Dashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [exams, setExams] = useState<Exam[]>([]);
+  const [homework, setHomework] = useState<Homework[]>([]);
   const [stats, setStats] = useState<StudyStats | null>(null);
   const [weekPlan, setWeekPlan] = useState<WeeklyPlan | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -56,22 +65,28 @@ export default function Dashboard() {
   const [smartPlanToday, setSmartPlanToday] = useState<SmartDayPlan | null>(null);
   const [studyGoals, setStudyGoals] = useState<{ [subject: string]: number }>({});
   const [allTopics, setAllTopics] = useState<Topic[]>([]);
+  const [isInClass, setIsInClass] = useState(false);
+  const [minutesUntilNext, setMinutesUntilNext] = useState<number | null>(null);
 
   useEffect(() => {
     // Update time every minute
     const timer = setInterval(() => {
       setCurrentTime(new Date());
       updateLessons();
+      updateClassStatus();
     }, 60000);
 
     // Load data
     const pendingExams = getExams().filter(e => e.status === 'pending').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const pendingHomework = getHomework().filter(h => h.status === 'pending').sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
     setExams(pendingExams);
+    setHomework(pendingHomework);
     setStats(getStudyStats());
     setWeekPlan(getCurrentWeekPlan());
     setSubjects(getSubjects());
     setAllTopics(getTopics());
     updateLessons();
+    updateClassStatus();
     
     // Generate smart plan for today
     generateTodaySmartPlan(pendingExams);
@@ -89,6 +104,25 @@ export default function Dashboard() {
     setCurrentLesson(getCurrentLesson());
     setNextLesson(getNextLesson());
     setTodayLessons(getTodayLessons());
+  };
+  
+  const updateClassStatus = () => {
+    const current = getCurrentLesson();
+    const next = getNextLesson();
+    
+    setIsInClass(!!current);
+    
+    if (next) {
+      const now = new Date();
+      const [hours, minutes] = next.startTime.split(':').map(Number);
+      const nextStart = new Date();
+      nextStart.setHours(hours, minutes, 0, 0);
+      
+      const diff = Math.floor((nextStart.getTime() - now.getTime()) / (1000 * 60));
+      setMinutesUntilNext(diff > 0 ? diff : null);
+    } else {
+      setMinutesUntilNext(null);
+    }
   };
   
   const generateTodaySmartPlan = (exams: Exam[]) => {
@@ -214,92 +248,236 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header with Current Lesson */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 md:p-8 text-white">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold mb-2">
-                {greeting}! 👋
-              </h1>
-              <p className="text-blue-100 mb-4">
-                {currentTime.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
+      <div className="max-w-7xl mx-auto space-y-4">
+        {/* Top Info Bar - Prossima Lezione */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            {/* Current/Next Lesson Info */}
+            <div className="flex items-center gap-6">
+              {isInClass && currentLesson ? (
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    <div className="absolute inset-0 w-3 h-3 bg-green-500 rounded-full animate-ping"></div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">IN CORSO ORA</p>
+                    <p className="font-bold text-gray-900">{currentLesson.subject}</p>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <MapPin className="w-3 h-3" />
+                      <span className="font-medium">{currentLesson.room}</span>
+                      <span className="text-gray-400">•</span>
+                      <span>fino alle {currentLesson.endTime}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : nextLesson ? (
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-100 p-2 rounded-lg">
+                    <School className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">PROSSIMA LEZIONE</p>
+                    <p className="font-bold text-gray-900">{nextLesson.subject}</p>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <MapPin className="w-3 h-3" />
+                      <span className="font-medium text-blue-600">{nextLesson.room}</span>
+                      <span className="text-gray-400">•</span>
+                      <Clock className="w-3 h-3" />
+                      <span>{nextLesson.startTime}</span>
+                      {minutesUntilNext && minutesUntilNext < 60 && (
+                        <>
+                          <span className="text-gray-400">•</span>
+                          <span className="text-orange-600 font-medium">tra {minutesUntilNext} min</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="bg-gray-100 p-2 rounded-lg">
+                    <Coffee className="w-5 h-5 text-gray-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">NESSUNA LEZIONE</p>
+                    <p className="font-bold text-gray-900">Giornata libera</p>
+                    <p className="text-sm text-gray-600">Ottimo momento per studiare!</p>
+                  </div>
+                </div>
+              )}
             </div>
-            <Link 
-              href="/schedule"
-              className="bg-white/20 backdrop-blur hover:bg-white/30 transition-colors px-4 py-2 rounded-lg text-white"
-            >
-              Vedi Orario →
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-white/20 backdrop-blur rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Clock className="w-4 h-4" />
-                <span className="text-sm opacity-90">Ore di studio</span>
+
+            {/* Quick Stats */}
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900">{stats?.totalHours || 0}h</p>
+                <p className="text-xs text-gray-500">Studio totale</p>
               </div>
-              <p className="text-2xl font-bold">{stats?.totalHours || 0}h</p>
+              <div className="h-10 w-px bg-gray-200"></div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-orange-600">{stats?.studyStreak || 0}</p>
+                <p className="text-xs text-gray-500">Giorni streak</p>
+              </div>
+              <div className="h-10 w-px bg-gray-200"></div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-600">{stats?.averageGrade?.toFixed(1) || '-'}</p>
+                <p className="text-xs text-gray-500">Media voti</p>
+              </div>
             </div>
-            <div className="bg-white/20 backdrop-blur rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Flame className="w-4 h-4" />
-                <span className="text-sm opacity-90">Streak</span>
-              </div>
-              <p className="text-2xl font-bold">{stats?.studyStreak || 0} giorni</p>
-            </div>
-            <div className="bg-white/20 backdrop-blur rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Trophy className="w-4 h-4" />
-                <span className="text-sm opacity-90">Media voti</span>
-              </div>
-              <p className="text-2xl font-bold">{stats?.averageGrade?.toFixed(1) || '-'}</p>
-            </div>
-            <div className="bg-white/20 backdrop-blur rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Target className="w-4 h-4" />
-                <span className="text-sm opacity-90">Completamento</span>
-              </div>
-              <p className="text-2xl font-bold">
-                {stats && stats.totalTasks > 0 
-                  ? Math.round((stats.completedTasks / stats.totalTasks) * 100) 
-                  : 0}%
-              </p>
+
+            {/* Quick Actions */}
+            <div className="flex items-center gap-2">
+              <Link 
+                href="/schedule"
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <Calendar className="w-4 h-4" />
+                Orario
+              </Link>
+              <Link 
+                href="/pomodoro"
+                className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <Timer className="w-4 h-4" />
+                Studia
+              </Link>
             </div>
           </div>
         </div>
 
-        {/* Next Lesson Card */}
-        {nextLesson && (
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <School className="w-5 h-5" />
-                  <span className="text-green-100 text-sm font-medium">Prossima Lezione</span>
-                </div>
-                <h3 className="text-2xl font-bold mb-2">{nextLesson.subject}</h3>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-green-100" />
-                    <span className="font-medium">{nextLesson.room}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-green-100" />
-                    <span>{nextLesson.startTime} - {nextLesson.endTime}</span>
-                  </div>
-                </div>
+        {/* Urgent Tasks Overview - Compiti e Verifiche */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Homework Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-purple-600" />
+                <h3 className="font-semibold text-gray-900">Compiti da fare</h3>
               </div>
               <Link 
-                href="/schedule"
-                className="bg-white/20 backdrop-blur hover:bg-white/30 transition-colors px-4 py-3 rounded-lg flex flex-col items-center"
+                href="/tasks"
+                className="text-sm text-purple-600 hover:text-purple-700 font-medium"
               >
-                <span className="text-2xl font-bold">{nextLesson.startTime}</span>
-                <span className="text-xs">Orario completo →</span>
+                Tutti →
               </Link>
             </div>
+            
+            {homework.length > 0 ? (
+              <div className="space-y-2">
+                {homework.slice(0, 3).map(hw => {
+                  const daysUntil = Math.ceil((new Date(hw.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                  const isUrgent = daysUntil <= 1;
+                  
+                  return (
+                    <div key={hw.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900 text-sm">{hw.subject}</p>
+                          <p className="text-xs text-gray-600 line-clamp-1">{hw.description}</p>
+                        </div>
+                        <div className="text-right ml-2">
+                          <p className={`text-xs font-medium ${
+                            isUrgent ? 'text-red-600' : 'text-gray-600'
+                          }`}>
+                            {daysUntil === 0 ? 'Oggi' : 
+                             daysUntil === 1 ? 'Domani' : 
+                             `${daysUntil} giorni`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {homework.length > 3 && (
+                  <p className="text-xs text-gray-500 text-center pt-1">
+                    +{homework.length - 3} altri compiti
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-gray-500">
+                <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                <p className="text-sm">Nessun compito pendente!</p>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Exams Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+                <h3 className="font-semibold text-gray-900">Prossime verifiche</h3>
+              </div>
+              <Link 
+                href="/exams"
+                className="text-sm text-red-600 hover:text-red-700 font-medium"
+              >
+                Tutte →
+              </Link>
+            </div>
+            
+            {exams.length > 0 ? (
+              <div className="space-y-2">
+                {exams.slice(0, 3).map(exam => {
+                  const daysUntil = getDaysUntilExam(exam.date);
+                  const urgency = daysUntil <= 3 ? 'high' : daysUntil <= 7 ? 'medium' : 'low';
+                  
+                  return (
+                    <div key={exam.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              urgency === 'high' ? 'bg-red-500' : 
+                              urgency === 'medium' ? 'bg-yellow-500' : 
+                              'bg-green-500'
+                            }`} />
+                            <p className="font-medium text-gray-900 text-sm">{exam.subject}</p>
+                          </div>
+                          <p className="text-xs text-gray-600 pl-4">
+                            {exam.type === 'written' ? 'Scritto' : 'Orale'} • {exam.topics.length} argomenti
+                          </p>
+                        </div>
+                        <div className="text-right ml-2">
+                          <p className={`text-xs font-medium ${
+                            urgency === 'high' ? 'text-red-600' : 
+                            urgency === 'medium' ? 'text-yellow-600' : 
+                            'text-gray-600'
+                          }`}>
+                            {daysUntil === 0 ? 'OGGI' : 
+                             daysUntil === 1 ? 'DOMANI' : 
+                             `${daysUntil} giorni`}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(exam.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {exams.length > 3 && (
+                  <p className="text-xs text-gray-500 text-center pt-1">
+                    +{exams.length - 3} altre verifiche
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-gray-500">
+                <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                <p className="text-sm">Nessuna verifica in programma!</p>
+                <Link 
+                  href="/exams"
+                  className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 hover:text-blue-700"
+                >
+                  Aggiungi verifica <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* ClasseViva Sync Banner - Show only if no exams */}
         {exams.length === 0 && (

@@ -21,6 +21,7 @@ import {
   Save,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Archive,
   RefreshCw,
   Download,
@@ -310,106 +311,143 @@ export default function HomeworkPage() {
   };
 
   const CalendarView = () => {
+    const [currentMonth, setCurrentMonth] = useState(new Date());
     const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
     
-    const weeks = [];
-    let currentWeek = [];
-    const date = new Date(startDate);
-    
-    while (date <= lastDay || currentWeek.length > 0) {
-      if (currentWeek.length === 7) {
-        weeks.push(currentWeek);
-        currentWeek = [];
-      }
-      
-      const currentDate = new Date(date);
-      const homeworkForDay = homework.filter(hw => {
-        const hwDate = new Date(hw.dueDate);
-        return hwDate.toDateString() === currentDate.toDateString();
-      });
-      
-      currentWeek.push({
-        date: currentDate,
-        homework: homeworkForDay,
-        isCurrentMonth: currentDate.getMonth() === currentMonth,
-        isToday: currentDate.toDateString() === today.toDateString()
-      });
-      
-      date.setDate(date.getDate() + 1);
-      
-      if (date.getMonth() > currentMonth && currentWeek.length > 0) {
-        while (currentWeek.length < 7) {
-          const nextDate = new Date(date);
-          const hwForDay = homework.filter(hw => {
-            const hwDate = new Date(hw.dueDate);
-            return hwDate.toDateString() === nextDate.toDateString();
-          });
-          
-          currentWeek.push({
-            date: nextDate,
-            homework: hwForDay,
-            isCurrentMonth: false,
-            isToday: false
-          });
-          date.setDate(date.getDate() + 1);
+    const navigateMonth = (direction: 'prev' | 'next') => {
+      setCurrentMonth(prev => {
+        const newDate = new Date(prev);
+        if (direction === 'prev') {
+          newDate.setMonth(newDate.getMonth() - 1);
+        } else {
+          newDate.setMonth(newDate.getMonth() + 1);
         }
+        return newDate;
+      });
+    };
+    
+    const getDaysInMonth = () => {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startingDayOfWeek = firstDay.getDay(); // 0 = Sunday
+      
+      const days = [];
+      
+      // Add empty cells for days before month starts (starting from Sunday)
+      for (let i = 0; i < startingDayOfWeek; i++) {
+        days.push(null);
       }
-    }
+      
+      // Add all days of the month
+      for (let i = 1; i <= daysInMonth; i++) {
+        days.push(new Date(year, month, i));
+      }
+      
+      // Fill remaining cells to complete the grid
+      while (days.length % 7 !== 0) {
+        days.push(null);
+      }
+      
+      return days;
+    };
+    
+    const getHomeworkForDate = (date: Date | null) => {
+      if (!date) return [];
+      return homework.filter(hw => {
+        const hwDate = new Date(hw.dueDate);
+        return hwDate.toDateString() === date.toDateString();
+      });
+    };
+    
+    const daysInMonth = getDaysInMonth();
     
     return (
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        {/* Calendar Header with Navigation */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <button
+            onClick={() => navigateMonth('prev')}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h3 className="text-lg font-semibold text-gray-900">
+            {currentMonth.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+          </h3>
+          <button
+            onClick={() => navigateMonth('next')}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+        
+        {/* Calendar Grid */}
         <div className="grid grid-cols-7 gap-px bg-gray-200">
+          {/* Day Headers */}
           {['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'].map(day => (
             <div key={day} className="bg-gray-50 p-2 text-center text-sm font-medium text-gray-700">
               {day}
             </div>
           ))}
-        </div>
-        <div className="grid grid-cols-7 gap-px bg-gray-200">
-          {weeks.map((week, weekIndex) => 
-            week.map((day, dayIndex) => (
+          
+          {/* Calendar Days */}
+          {daysInMonth.map((date, index) => {
+            const homeworkForDay = date ? getHomeworkForDate(date) : [];
+            const isToday = date && date.toDateString() === today.toDateString();
+            const isCurrentMonth = date && date.getMonth() === currentMonth.getMonth();
+            
+            return (
               <div
-                key={`${weekIndex}-${dayIndex}`}
+                key={index}
                 className={`bg-white p-2 min-h-[100px] ${
-                  !day.isCurrentMonth ? 'bg-gray-50' : ''
-                } ${day.isToday ? 'bg-blue-50' : ''} hover:bg-gray-50 cursor-pointer transition-colors`}
-                onClick={() => setSelectedDate(day.date)}
+                  !isCurrentMonth ? 'bg-gray-50' : ''
+                } ${isToday ? 'bg-blue-50 ring-2 ring-blue-500 ring-inset' : ''} 
+                ${date ? 'hover:bg-gray-50 cursor-pointer' : ''} transition-colors`}
+                onClick={() => date && setSelectedDate(date)}
               >
-                <div className={`text-sm font-medium ${
-                  day.isToday ? 'text-blue-600' : 
-                  !day.isCurrentMonth ? 'text-gray-400' : 'text-gray-900'
-                }`}>
-                  {day.date.getDate()}
-                </div>
-                <div className="mt-1 space-y-1">
-                  {day.homework.slice(0, 3).map((hw, index) => (
-                    <div
-                      key={hw.id}
-                      className={`text-xs p-1 rounded truncate ${
-                        hw.status === 'completed' ? 'bg-green-100 text-green-700' :
-                        hw.status === 'overdue' ? 'bg-red-100 text-red-700' :
-                        'bg-blue-100 text-blue-700'
-                      }`}
-                      title={hw.description}
-                    >
-                      {hw.subject.substring(0, 3)}
+                {date && (
+                  <>
+                    <div className={`text-sm font-medium mb-1 ${
+                      isToday ? 'text-blue-600' : 
+                      !isCurrentMonth ? 'text-gray-400' : 'text-gray-900'
+                    }`}>
+                      {date.getDate()}
                     </div>
-                  ))}
-                  {day.homework.length > 3 && (
-                    <div className="text-xs text-gray-500">
-                      +{day.homework.length - 3} altri
+                    <div className="space-y-1">
+                      {homeworkForDay.slice(0, 3).map(hw => (
+                        <div
+                          key={hw.id}
+                          className={`text-xs p-1 rounded truncate cursor-pointer hover:opacity-80 ${
+                            hw.status === 'completed' ? 'bg-green-100 text-green-700 line-through' :
+                            hw.status === 'overdue' ? 'bg-red-100 text-red-700' :
+                            hw.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                            hw.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}
+                          title={`${hw.subject}: ${hw.description}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(hw);
+                          }}
+                        >
+                          {hw.subject.length > 8 ? hw.subject.substring(0, 8) + '...' : hw.subject}
+                        </div>
+                      ))}
+                      {homeworkForDay.length > 3 && (
+                        <div className="text-xs text-gray-500 text-center">
+                          +{homeworkForDay.length - 3}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
-            ))
-          )}
+            );
+          })}
         </div>
       </div>
     );
