@@ -26,10 +26,11 @@ import {
   ArrowRight,
   Bell,
   Users,
-  Coffee
+  Coffee,
+  Loader2
 } from 'lucide-react';
 import Link from 'next/link';
-import { getExams, getStudyStats, getCurrentWeekPlan, getSubjects, getTopics, getHomework } from '@/lib/storage';
+import { getExams, getStudyStats, getCurrentWeekPlan, getSubjects, getTopics, getHomework } from '@/lib/supabase-storage';
 import { getCurrentLesson, getNextLesson, getTodayLessons, getOptimalStudyPlan } from '@/lib/schedule-helpers';
 import { formatDate, getDaysUntilExam, formatTime } from '@/lib/utils';
 import { Exam, StudyStats, WeeklyPlan, Subject, Topic, Homework } from '@/lib/types';
@@ -55,7 +56,7 @@ export default function Dashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [exams, setExams] = useState<Exam[]>([]);
   const [homework, setHomework] = useState<Homework[]>([]);
-  const [stats, setStats] = useState<StudyStats | null>(null);
+  const [stats, setStats] = useState<StudyStats[]>([]);
   const [weekPlan, setWeekPlan] = useState<WeeklyPlan | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [greeting, setGreeting] = useState('');
@@ -67,29 +68,17 @@ export default function Dashboard() {
   const [allTopics, setAllTopics] = useState<Topic[]>([]);
   const [isInClass, setIsInClass] = useState(false);
   const [minutesUntilNext, setMinutesUntilNext] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    loadData();
+    
     // Update time every minute
     const timer = setInterval(() => {
       setCurrentTime(new Date());
       updateLessons();
       updateClassStatus();
     }, 60000);
-
-    // Load data
-    const pendingExams = getExams().filter(e => e.status === 'pending').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const pendingHomework = getHomework().filter(h => h.status === 'pending').sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-    setExams(pendingExams);
-    setHomework(pendingHomework);
-    setStats(getStudyStats());
-    setWeekPlan(getCurrentWeekPlan());
-    setSubjects(getSubjects());
-    setAllTopics(getTopics());
-    updateLessons();
-    updateClassStatus();
-    
-    // Generate smart plan for today
-    generateTodaySmartPlan(pendingExams);
 
     // Set greeting based on time
     const hour = new Date().getHours();
@@ -99,6 +88,41 @@ export default function Dashboard() {
 
     return () => clearInterval(timer);
   }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      const [examData, homeworkData, statsData, weekPlanData, subjectsData, topicsData] = await Promise.all([
+        getExams(),
+        getHomework(),
+        getStudyStats(),
+        getCurrentWeekPlan(),
+        getSubjects(),
+        getTopics()
+      ]);
+      
+      const pendingExams = examData.filter(e => e.status === 'scheduled').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const pendingHomework = homeworkData.filter(h => h.status === 'pending').sort((a, b) => new Date(h.due_date).getTime() - new Date(b.due_date).getTime());
+      
+      setExams(pendingExams);
+      setHomework(pendingHomework);
+      setStats(statsData);
+      setWeekPlan(weekPlanData);
+      setSubjects(subjectsData);
+      setAllTopics(topicsData);
+      
+      updateLessons();
+      updateClassStatus();
+      
+      // Generate smart plan for today
+      generateTodaySmartPlan(pendingExams);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const updateLessons = () => {
     setCurrentLesson(getCurrentLesson());
@@ -246,6 +270,19 @@ export default function Dashboard() {
       .filter(t => t.completed).length : 0;
   const totalTasksToday = 4;
 
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+            <span className="ml-3 text-gray-600">Caricamento dashboard...</span>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto space-y-4">
@@ -356,7 +393,7 @@ export default function Dashboard() {
                 <h3 className="font-semibold text-gray-900">Compiti da fare</h3>
               </div>
               <Link 
-                href="/tasks"
+                href="/homework"
                 className="text-sm text-purple-600 hover:text-purple-700 font-medium"
               >
                 Tutti →
@@ -510,153 +547,87 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Smart Plan Widget */}
-        <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-4">
+        {/* Afternoon Study Widget - Compact */}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="bg-white/20 backdrop-blur p-2 rounded-lg">
-                  <Sparkles className="w-5 h-5 text-white" />
+                  <Brain className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Piano Studio Intelligente</h2>
-                  <p className="text-xs text-purple-100">Ottimizzato per le tue verifiche</p>
+                  <h2 className="text-lg font-semibold text-white">Piano Studio Pomeridiano</h2>
+                  <p className="text-xs text-indigo-100">Ottimizza il tuo tempo di studio</p>
                 </div>
               </div>
               <Link 
                 href="/smart-plan"
-                className="flex items-center gap-1 px-3 py-1.5 bg-white/20 backdrop-blur text-white rounded-lg hover:bg-white/30 transition-colors text-sm font-medium"
+                className="flex items-center gap-1 px-4 py-2 bg-white text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors text-sm font-bold"
               >
-                Gestisci piano
+                Gestisci Piano
                 <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
           </div>
           
-          {/* Content */}
-          <div className="p-6">
-            {smartPlanToday && smartPlanToday.studySlots.length > 0 ? (
-              <div className="space-y-4">
-                {/* Summary Stats */}
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="bg-white rounded-lg p-3 border border-purple-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Clock className="w-4 h-4 text-purple-600" />
-                      <span className="text-xs text-gray-600">Tempo totale</span>
-                    </div>
-                    <p className="text-lg font-bold text-gray-900">
-                      {Math.floor(smartPlanToday.totalMinutes / 60)}h {smartPlanToday.totalMinutes % 60}m
-                    </p>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-purple-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Target className="w-4 h-4 text-purple-600" />
-                      <span className="text-xs text-gray-600">Sessioni</span>
-                    </div>
-                    <p className="text-lg font-bold text-gray-900">{smartPlanToday.studySlots.length}</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-purple-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Brain className="w-4 h-4 text-purple-600" />
-                      <span className="text-xs text-gray-600">Focus</span>
-                    </div>
-                    <p className="text-lg font-bold text-gray-900">
-                      {Object.entries(studyGoals).sort((a, b) => b[1] - a[1])[0]?.[0]?.substring(0, 10) || 'N/A'}
-                    </p>
-                  </div>
+          <div className="p-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Da Ripassare Oggi */}
+              <div className="bg-indigo-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <BookOpen className="w-4 h-4 text-indigo-600" />
+                  <span className="text-sm font-medium text-gray-900">Da Ripassare</span>
                 </div>
-                
-                {/* Study Slots */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-500" />
-                    Programma di oggi
-                  </h3>
-                  {smartPlanToday.studySlots.map((slot, idx) => (
-                    <div 
-                      key={idx}
-                      className={`relative bg-white rounded-lg p-4 border-l-4 transition-all hover:shadow-md ${
-                        slot.priority === 'high' 
-                          ? 'border-red-500' 
-                          : slot.priority === 'medium'
-                          ? 'border-yellow-500'
-                          : 'border-green-500'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-gray-900">{slot.subject}</p>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              slot.type === 'review' ? 'bg-blue-100 text-blue-700' :
-                              slot.type === 'exercise' ? 'bg-purple-100 text-purple-700' :
-                              slot.type === 'study' ? 'bg-green-100 text-green-700' :
-                              'bg-gray-100 text-gray-700'
-                            }`}>
-                              {slot.type === 'review' ? 'Ripasso' :
-                               slot.type === 'exercise' ? 'Esercizi' :
-                               slot.type === 'study' ? 'Studio' :
-                               'Preparazione'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">{slot.topic}</p>
-                        </div>
-                        <div className="text-right">
-                          <div className="flex items-center gap-1 text-gray-700">
-                            <Clock className="w-4 h-4" />
-                            <span className="font-medium">{slot.time}</span>
-                          </div>
-                          <span className="text-xs text-gray-500">{slot.duration} min</span>
-                        </div>
-                      </div>
-                      
-                      {/* Priority indicator */}
-                      {slot.priority === 'high' && (
-                        <div className="absolute top-2 right-2">
-                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                
-                {/* AI Insights */}
-                {Object.keys(studyGoals).length > 0 && (
-                  <div className="bg-gradient-to-r from-purple-100 to-blue-100 rounded-lg p-4 mt-4">
-                    <div className="flex items-start gap-3">
-                      <Brain className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900 mb-1">💡 Suggerimento AI</p>
-                        <p className="text-sm text-gray-700">
-                          {exams.length > 0 && exams[0] ? (
-                            <>Focus su <strong>{exams[0].subject}</strong> - verifica tra {getDaysUntilExam(exams[0].date)} giorni. 
-                            Dedica almeno {Math.round((studyGoals[exams[0].subject] || 60) / 60)} ore questa settimana.</>
-                          ) : (
-                            'Ottimo momento per consolidare gli argomenti e fare esercizi extra!'
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <p className="text-2xl font-bold text-indigo-600">
+                  {todayLessons ? todayLessons.length : 0}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">lezioni di oggi</p>
               </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="w-8 h-8 text-purple-600" />
+              
+              {/* Tempo Studio Consigliato */}
+              <div className="bg-purple-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm font-medium text-gray-900">Tempo Studio</span>
                 </div>
-                <p className="text-gray-900 font-medium mb-2">Piano studio non ancora generato</p>
-                <p className="text-sm text-gray-600 mb-4">Crea un piano personalizzato basato sul tuo orario e le verifiche</p>
-                <Link 
-                  href="/smart-plan"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Genera Piano Intelligente
-                </Link>
+                <p className="text-2xl font-bold text-purple-600">
+                  {exams.length > 0 && getDaysUntilExam(exams[0].date) <= 3 ? '3h' : '2.5h'}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">consigliato oggi</p>
               </div>
-            )}
+              
+              {/* Focus Prioritario */}
+              <div className="bg-red-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="w-4 h-4 text-red-600" />
+                  <span className="text-sm font-medium text-gray-900">Focus su</span>
+                </div>
+                <p className="text-lg font-bold text-red-600 truncate">
+                  {exams.length > 0 ? exams[0].subject : 'Compiti'}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">
+                  {exams.length > 0 ? `verifica tra ${getDaysUntilExam(exams[0].date)}g` : 'per domani'}
+                </p>
+              </div>
+            </div>
+            
+            {/* Quick Timeline */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-gray-600">15:00 - Ripasso</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-gray-600">16:00 - Studio</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                  <span className="text-gray-600">17:30 - Esercizi</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -743,14 +714,14 @@ export default function Dashboard() {
           </Link>
 
           <Link 
-            href="/smart-plan"
+            href="/homework"
             className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow group"
           >
             <div className="flex flex-col items-center text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-100 to-blue-100 rounded-lg flex items-center justify-center mb-3 group-hover:from-purple-200 group-hover:to-blue-200 transition-colors">
-                <Sparkles className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg flex items-center justify-center mb-3 group-hover:from-purple-200 group-hover:to-pink-200 transition-colors">
+                <ClipboardList className="w-6 h-6 text-purple-600" />
               </div>
-              <p className="text-sm font-medium text-gray-900">Smart Plan</p>
+              <p className="text-sm font-medium text-gray-900">Compiti</p>
             </div>
           </Link>
 

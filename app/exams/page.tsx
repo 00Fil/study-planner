@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { Plus, Calendar, Clock, AlertCircle, Edit2, Trash2, CheckCircle, ChevronDown, Check, X, Target, BookOpen } from 'lucide-react';
+import { Plus, Calendar, Clock, AlertCircle, Edit2, Trash2, CheckCircle, ChevronDown, Check, X, Target, BookOpen, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getExams, saveExam, deleteExam, getSubjects, getTopicsBySubject, markTopicsForExam, unmarkTopicsForExam, getTopics } from '@/lib/storage';
+import { getExams, saveExam, deleteExam, getSubjects, getTopicsBySubject, markTopicsForExam, unmarkTopicsForExam, getTopics } from '@/lib/supabase-storage';
 import { getDaysUntilExam, getPriorityColor, parseGradeToNumber } from '@/lib/utils';
 import { Exam, Subject, Topic } from '@/lib/types';
 
@@ -16,6 +16,8 @@ export default function ExamsPage() {
   const [availableTopics, setAvailableTopics] = useState<Topic[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [showTopicSelector, setShowTopicSelector] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     subject: '',
     date: '',
@@ -25,25 +27,45 @@ export default function ExamsPage() {
   });
 
   useEffect(() => {
-    loadExams();
-    setSubjects(getSubjects());
+    loadData();
   }, []);
 
   useEffect(() => {
     if (formData.subject) {
-      const topics = getTopicsBySubject(formData.subject);
-      setAvailableTopics(topics);
+      loadTopicsForSubject(formData.subject);
     } else {
       setAvailableTopics([]);
     }
   }, [formData.subject]);
 
-  const loadExams = () => {
-    const allExams = getExams();
-    setExams(allExams.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [examData, subjectData] = await Promise.all([
+        getExams(),
+        getSubjects()
+      ]);
+      setExams(examData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      setSubjects(subjectData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Errore nel caricamento dei dati');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const loadTopicsForSubject = async (subjectName: string) => {
+    try {
+      const topics = await getTopicsBySubject(subjectName);
+      setAvailableTopics(topics);
+    } catch (error) {
+      console.error('Error loading topics:', error);
+      toast.error('Errore nel caricamento degli argomenti');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.subject || !formData.date) {
@@ -56,46 +78,54 @@ export default function ExamsPage() {
       return;
     }
 
-    const exam: Exam = {
-      id: editingExam?.id || Date.now().toString(),
-      subject: formData.subject,
-      date: formData.date,
-      type: formData.type,
-      topics: selectedTopics, // Now storing topic IDs
-      priority: formData.priority,
-      status: editingExam?.status || 'pending',
-      grade: editingExam?.grade,
-      notes: editingExam?.notes,
-    };
+    setSaving(true);
+    try {
+      const exam: Exam = {
+        id: editingExam?.id || Date.now().toString(),
+        subject: formData.subject,
+        date: formData.date,
+        type: formData.type,
+        topics: selectedTopics,
+        difficulty: formData.priority === 'high' ? 5 : formData.priority === 'medium' ? 3 : 1,
+        status: editingExam?.status || 'scheduled',
+        grade: editingExam?.grade,
+        notes: editingExam?.notes,
+      };
 
-    // Mark selected topics for this exam
-    if (!editingExam) {
-      markTopicsForExam(selectedTopics, exam.id);
-    } else if (editingExam) {
-      // Unmark old topics and mark new ones
-      unmarkTopicsForExam(editingExam.topics, editingExam.id);
-      markTopicsForExam(selectedTopics, exam.id);
+      // Mark selected topics for this exam
+      if (!editingExam) {
+        await markTopicsForExam(selectedTopics, exam.id);
+      } else if (editingExam) {
+        // Unmark old topics and mark new ones
+        await unmarkTopicsForExam(editingExam.topics, editingExam.id);
+        await markTopicsForExam(selectedTopics, exam.id);
+      }
+
+      await saveExam(exam);
+      await loadData();
+      
+      if (editingExam) {
+        toast.success('Verifica aggiornata con successo');
+      } else {
+        toast.success('Verifica aggiunta con successo');
+      }
+
+      setShowAddModal(false);
+      setEditingExam(null);
+      setSelectedTopics([]);
+      setFormData({
+        subject: '',
+        date: '',
+        type: 'written',
+        topics: '',
+        priority: 'medium',
+      });
+    } catch (error) {
+      console.error('Error saving exam:', error);
+      toast.error('Errore nel salvataggio della verifica');
+    } finally {
+      setSaving(false);
     }
-
-    saveExam(exam);
-    loadExams();
-    
-    if (editingExam) {
-      toast.success('Verifica aggiornata con successo');
-    } else {
-      toast.success('Verifica aggiunta con successo');
-    }
-
-    setShowAddModal(false);
-    setEditingExam(null);
-    setSelectedTopics([]);
-    setFormData({
-      subject: '',
-      date: '',
-      type: 'written',
-      topics: '',
-      priority: 'medium',
-    });
   };
 
   const handleEdit = (exam: Exam) => {
@@ -111,36 +141,70 @@ export default function ExamsPage() {
     setShowAddModal(true);
   };
 
-  const handleDelete = (examId: string) => {
+  const handleDelete = async (examId: string) => {
     if (window.confirm('Sei sicuro di voler eliminare questa verifica?')) {
-      deleteExam(examId);
-      loadExams();
-      toast.success('Verifica eliminata');
+      setSaving(true);
+      try {
+        await deleteExam(examId);
+        await loadData();
+        toast.success('Verifica eliminata');
+      } catch (error) {
+        console.error('Error deleting exam:', error);
+        toast.error('Errore nell\'eliminazione della verifica');
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
-  const handleMarkComplete = (exam: Exam, grade: string) => {
-    const updatedExam = {
-      ...exam,
-      status: 'completed' as const,
-      grade
-    };
-    saveExam(updatedExam);
-    loadExams();
-    toast.success('Verifica completata!');
+  const handleMarkComplete = async (exam: Exam, grade: string) => {
+    setSaving(true);
+    try {
+      const updatedExam = {
+        ...exam,
+        status: 'completed' as const,
+        grade: parseFloat(grade)
+      };
+      await saveExam(updatedExam);
+      await loadData();
+      toast.success('Verifica completata!');
+    } catch (error) {
+      console.error('Error marking exam complete:', error);
+      toast.error('Errore nel completamento della verifica');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const pendingExams = exams.filter(e => e.status === 'pending');
+  const pendingExams = exams.filter(e => e.status === 'scheduled');
   const completedExams = exams.filter(e => e.status === 'completed');
 
   // Helper function to get topic titles from IDs
-  const getTopicTitles = (topicIds: string[]) => {
-    const allTopics = getTopics();
-    return topicIds.map(id => {
-      const topic = allTopics.find(t => t.id === id);
-      return topic ? topic.title : id; // Fallback to ID if not found (for old data)
-    });
+  const getTopicTitles = async (topicIds: string[]) => {
+    try {
+      const allTopics = await getTopics();
+      return topicIds.map(id => {
+        const topic = allTopics.find(t => t.id === id);
+        return topic ? topic.name : id; // Fallback to ID if not found (for old data)
+      });
+    } catch (error) {
+      console.error('Error getting topic titles:', error);
+      return topicIds;
+    }
   };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+            <span className="ml-3 text-gray-600">Caricamento verifiche...</span>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

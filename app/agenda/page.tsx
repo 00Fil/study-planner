@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
   Calendar,
@@ -30,7 +30,14 @@ import {
   TrendingUp,
   RefreshCw,
   Download,
-  Upload
+  Upload,
+  FileText,
+  GraduationCap,
+  Users,
+  ArrowRight,
+  List,
+  CalendarDays,
+  BookMarked
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -40,335 +47,374 @@ import {
   getHomework,
   saveHomework,
   deleteHomework,
-  getPomodoroSessions
+  getPomodoroSessions,
+  saveExam,
+  deleteExam,
+  saveTopic
 } from '@/lib/storage';
 import { Exam, Topic, Subject, Homework } from '@/lib/types';
 
-interface GanttTask {
+interface CalendarEvent {
   id: string;
   title: string;
-  type: 'exam-prep' | 'homework' | 'review' | 'study' | 'break';
+  type: 'exam' | 'homework' | 'review' | 'study' | 'exam-prep';
   subject: string;
-  startDate: Date;
-  endDate: Date;
-  progress: number;
+  date: Date;
   priority: 'high' | 'medium' | 'low';
-  difficulty: 'easy' | 'medium' | 'hard';
   color: string;
-  description?: string;
-  dependencies?: string[];
   completed: boolean;
-  estimatedHours: number;
-  actualHours?: number;
+  estimatedHours?: number;
+  description?: string;
+  icon?: any;
   relatedExamId?: string;
   relatedHomeworkId?: string;
-  relatedTopicIds?: string[];
-}
-
-interface TimeSlot {
-  hour: number;
-  available: boolean;
-  task?: GanttTask;
-  efficiency: number; // 0-1 score based on personal study patterns
-}
-
-interface DaySchedule {
-  date: Date;
-  slots: TimeSlot[];
-  totalAvailableHours: number;
-  suggestedFocus: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 export default function AgendaPage() {
-  const [tasks, setTasks] = useState<GanttTask[]>([]);
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedTask, setSelectedTask] = useState<GanttTask | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterSubject, setFilterSubject] = useState<string>('all');
-  const [showSettings, setShowSettings] = useState(false);
-  const [studyPreferences, setStudyPreferences] = useState({
-    morningStart: 8,
-    eveningEnd: 22,
-    breakDuration: 15,
-    sessionDuration: 45,
-    preferredTimes: ['morning', 'afternoon'],
-    avoidWeekends: false
-  });
+  const [showEventDetail, setShowEventDetail] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showDayPanel, setShowDayPanel] = useState(false);
+  const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load data and generate tasks
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Load data and generate events
   useEffect(() => {
-    generateTasks();
+    generateCalendarEvents();
   }, []);
 
-  const generateTasks = () => {
+  const generateCalendarEvents = () => {
     setLoading(true);
     const exams = getExams().filter(e => e.status === 'pending');
     const homework = getHomework().filter(h => h.status === 'pending');
     const topics = getTopics();
-    const subjects = getSubjects();
+    const subjectsList = getSubjects();
+    setSubjects(subjectsList);
 
-    const generatedTasks: GanttTask[] = [];
+    const events: CalendarEvent[] = [];
 
-    // Generate exam preparation tasks
+    // Add exams as events
     exams.forEach(exam => {
-      const examDate = new Date(exam.date);
-      const today = new Date();
-      const daysUntil = Math.ceil((examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      const subject = subjects.find(s => s.name === exam.subject);
-      
-      if (daysUntil > 0 && daysUntil <= 30) {
-        // Calculate preparation time based on exam topics and difficulty
-        const examTopics = topics.filter(t => exam.topics.includes(t.id));
-        const avgDifficulty = calculateAverageDifficulty(examTopics);
-        const prepDays = Math.min(daysUntil - 1, Math.max(3, Math.ceil(examTopics.length * avgDifficulty)));
-        
-        // Create main exam preparation task
-        const prepTask: GanttTask = {
-          id: `exam-prep-${exam.id}`,
-          title: `Preparazione ${exam.subject}`,
-          type: 'exam-prep',
-          subject: exam.subject,
-          startDate: new Date(examDate.getTime() - (prepDays * 24 * 60 * 60 * 1000)),
-          endDate: new Date(examDate.getTime() - (24 * 60 * 60 * 1000)),
-          progress: 0,
-          priority: exam.priority,
-          difficulty: avgDifficulty > 2 ? 'hard' : avgDifficulty > 1.5 ? 'medium' : 'easy',
-          color: subject?.color || '#3B82F6',
-          description: `Preparazione per verifica di ${exam.subject} (${exam.type === 'written' ? 'Scritto' : 'Orale'})`,
-          completed: false,
-          estimatedHours: prepDays * 2,
-          relatedExamId: exam.id,
-          relatedTopicIds: exam.topics
-        };
-        generatedTasks.push(prepTask);
+      const subject = subjectsList.find(s => s.name === exam.subject);
+      events.push({
+        id: `exam-${exam.id}`,
+        title: `Verifica ${exam.subject}`,
+        type: 'exam',
+        subject: exam.subject,
+        date: new Date(exam.date),
+        priority: exam.priority,
+        color: subject?.color || '#EF4444',
+        completed: false,
+        estimatedHours: exam.topics.length * 2,
+        description: `${exam.type === 'written' ? 'Scritto' : 'Orale'} - ${exam.topics.length} argomenti`,
+        icon: AlertTriangle,
+        relatedExamId: exam.id,
+        difficulty: 'hard'
+      });
 
-        // Create review sessions for each topic
-        examTopics.forEach((topic, index) => {
-          const topicStartOffset = Math.floor((prepDays / examTopics.length) * index);
-          const reviewTask: GanttTask = {
-            id: `review-${exam.id}-${topic.id}`,
-            title: `Ripasso: ${topic.title}`,
-            type: 'review',
+      // Add exam preparation sessions
+      const examDate = new Date(exam.date);
+      const daysUntil = Math.ceil((examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntil > 0 && daysUntil <= 14) {
+        // Add preparation sessions
+        for (let i = Math.max(1, daysUntil - 7); i < daysUntil; i++) {
+          const prepDate = new Date(today);
+          prepDate.setDate(today.getDate() + i);
+          
+          events.push({
+            id: `prep-${exam.id}-${i}`,
+            title: `Prep. ${exam.subject}`,
+            type: 'exam-prep',
             subject: exam.subject,
-            startDate: new Date(prepTask.startDate.getTime() + (topicStartOffset * 24 * 60 * 60 * 1000)),
-            endDate: new Date(prepTask.startDate.getTime() + ((topicStartOffset + 1) * 24 * 60 * 60 * 1000)),
-            progress: topic.completed ? 100 : 0,
-            priority: topic.importance === 'high' ? 'high' : topic.importance === 'low' ? 'low' : 'medium',
-            difficulty: topic.difficulty,
-            color: subject?.color || '#3B82F6',
-            description: topic.description,
-            completed: topic.completed,
-            estimatedHours: topic.difficulty === 'hard' ? 2 : topic.difficulty === 'medium' ? 1.5 : 1,
-            dependencies: [`exam-prep-${exam.id}`],
-            relatedTopicIds: [topic.id]
-          };
-          generatedTasks.push(reviewTask);
+            date: prepDate,
+            priority: daysUntil <= 3 ? 'high' : 'medium',
+            color: subject?.color || '#8B5CF6',
+            completed: false,
+            estimatedHours: 2,
+            description: `Preparazione per verifica del ${examDate.toLocaleDateString('it-IT')}`,
+            icon: GraduationCap,
+            relatedExamId: exam.id
+          });
+        }
+
+        // Add intensive review the day before
+        const dayBefore = new Date(examDate);
+        dayBefore.setDate(examDate.getDate() - 1);
+        events.push({
+          id: `intensive-${exam.id}`,
+          title: `Ripasso ${exam.subject}`,
+          type: 'review',
+          subject: exam.subject,
+          date: dayBefore,
+          priority: 'high',
+          color: subject?.color || '#F59E0B',
+          completed: false,
+          estimatedHours: 3,
+          description: 'Ripasso intensivo pre-verifica',
+          icon: RefreshCw,
+          relatedExamId: exam.id
         });
       }
     });
 
-    // Generate homework tasks
+    // Add homework as events
     homework.forEach(hw => {
+      const subject = subjectsList.find(s => s.name === hw.subject);
       const dueDate = new Date(hw.dueDate);
-      const today = new Date();
-      const subject = subjects.find(s => s.name === hw.subject);
       
-      const hwTask: GanttTask = {
+      events.push({
         id: `homework-${hw.id}`,
         title: hw.description,
         type: 'homework',
         subject: hw.subject,
-        startDate: today,
-        endDate: dueDate,
-        progress: 0,
+        date: dueDate,
         priority: hw.priority,
-        difficulty: hw.estimatedHours && hw.estimatedHours > 2 ? 'hard' : hw.estimatedHours && hw.estimatedHours > 1 ? 'medium' : 'easy',
         color: subject?.color || '#10B981',
-        description: hw.notes,
-        completed: false,
+        completed: hw.status === 'completed',
         estimatedHours: hw.estimatedHours || 1,
-        relatedHomeworkId: hw.id
-      };
-      generatedTasks.push(hwTask);
+        description: hw.notes,
+        icon: FileText,
+        relatedHomeworkId: hw.id,
+        difficulty: hw.estimatedHours && hw.estimatedHours > 2 ? 'hard' : 
+                   hw.estimatedHours && hw.estimatedHours > 1 ? 'medium' : 'easy'
+      });
     });
 
-    // Generate regular study/review sessions for topics not in exams
+    // Add weekly review sessions for main subjects
+    const mainSubjects = subjectsList.filter(s => s.importance === 'high').slice(0, 3);
+    for (let weekOffset = 0; weekOffset < 4; weekOffset++) {
+      mainSubjects.forEach((subject, index) => {
+        const reviewDate = new Date(today);
+        reviewDate.setDate(today.getDate() + (weekOffset * 7) + index + 1);
+        
+        events.push({
+          id: `review-${subject.id}-week-${weekOffset}`,
+          title: `Ripasso ${subject.name}`,
+          type: 'review',
+          subject: subject.name,
+          date: reviewDate,
+          priority: 'low',
+          color: subject.color || '#3B82F6',
+          completed: false,
+          estimatedHours: 1,
+          description: 'Ripasso settimanale programmato',
+          icon: BookMarked
+        });
+      });
+    }
+
+    // Add study sessions for topics not covered by exams
     const unstudiedTopics = topics.filter(t => !t.completed && !t.markedForExam);
-    unstudiedTopics.slice(0, 10).forEach(topic => {
-      const subject = subjects.find(s => s.name === topic.subjectName);
-      const studyTask: GanttTask = {
+    unstudiedTopics.slice(0, 10).forEach((topic, index) => {
+      const subject = subjectsList.find(s => s.name === topic.subjectName);
+      const studyDate = new Date(today);
+      studyDate.setDate(today.getDate() + Math.floor(index / 2) + 2);
+      
+      events.push({
         id: `study-${topic.id}`,
-        title: `Studio: ${topic.title}`,
+        title: topic.title,
         type: 'study',
         subject: topic.subjectName,
-        startDate: new Date(),
-        endDate: new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)),
-        progress: 0,
-        priority: topic.importance === 'high' ? 'high' : topic.importance === 'low' ? 'low' : 'medium',
-        difficulty: topic.difficulty,
-        color: subject?.color || '#8B5CF6',
+        date: studyDate,
+        priority: topic.importance === 'high' ? 'medium' : 'low',
+        color: subject?.color || '#6366F1',
+        completed: topic.completed,
+        estimatedHours: topic.difficulty === 'hard' ? 2 : 1,
         description: topic.description,
-        completed: false,
-        estimatedHours: topic.difficulty === 'hard' ? 3 : topic.difficulty === 'medium' ? 2 : 1,
-        relatedTopicIds: [topic.id]
-      };
-      generatedTasks.push(studyTask);
+        icon: Brain,
+        difficulty: topic.difficulty
+      });
     });
 
-    // Sort tasks by priority and date
-    generatedTasks.sort((a, b) => {
-      const priorityWeight = { high: 3, medium: 2, low: 1 };
-      const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
-      if (priorityDiff !== 0) return priorityDiff;
-      return a.startDate.getTime() - b.startDate.getTime();
-    });
-
-    setTasks(generatedTasks);
+    setCalendarEvents(events);
     setLoading(false);
   };
 
-  const calculateAverageDifficulty = (topics: Topic[]): number => {
-    if (topics.length === 0) return 1.5;
-    const difficultyMap = { easy: 1, medium: 2, hard: 3 };
-    const sum = topics.reduce((acc, t) => acc + difficultyMap[t.difficulty], 0);
-    return sum / topics.length;
+  // Get events for a specific date
+  const getEventsForDate = (date: Date | null) => {
+    if (!date) return [];
+    const dateStr = date.toDateString();
+    return calendarEvents.filter(event => {
+      const eventDateStr = event.date.toDateString();
+      return eventDateStr === dateStr;
+    }).filter(event => {
+      if (filterType !== 'all' && event.type !== filterType) return false;
+      if (filterSubject !== 'all' && event.subject !== filterSubject) return false;
+      return true;
+    });
   };
 
-  // Generate calendar days for Gantt view
-  const getCalendarDays = (): Date[] => {
-    const days: Date[] = [];
-    const startDate = new Date(currentDate);
+  // Calendar grid generation
+  const getDaysInMonth = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
     
-    if (viewMode === 'week') {
-      // Start from Monday of current week
-      const dayOfWeek = startDate.getDay();
-      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      startDate.setDate(startDate.getDate() + diff);
-      
-      for (let i = 0; i < 7; i++) {
-        const day = new Date(startDate);
-        day.setDate(startDate.getDate() + i);
-        days.push(day);
-      }
-    } else {
-      // Month view
-      startDate.setDate(1);
-      const lastDay = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
-      
-      for (let i = 0; i < lastDay; i++) {
-        const day = new Date(startDate);
-        day.setDate(i + 1);
-        days.push(day);
-      }
+    const days: (Date | null)[] = [];
+    const current = new Date(startDate);
+    
+    while (days.length < 42) {
+      days.push(new Date(current));
+      current.setDate(current.getDate() + 1);
     }
     
     return days;
   };
 
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
-      if (filterType !== 'all' && task.type !== filterType) return false;
-      if (filterSubject !== 'all' && task.subject !== filterSubject) return false;
-      return true;
-    });
-  }, [tasks, filterType, filterSubject]);
+  const daysInMonth = getDaysInMonth();
 
-  const subjects = getSubjects();
-  const calendarDays = getCalendarDays();
-
-  const getTaskPosition = (task: GanttTask, days: Date[]): { left: string; width: string } | null => {
-    const firstDay = days[0];
-    const lastDay = days[days.length - 1];
-    
-    // Check if task is visible in current view
-    if (task.endDate < firstDay || task.startDate > lastDay) {
-      return null;
+  // Event type styling
+  const getEventTypeStyle = (type: CalendarEvent['type']) => {
+    switch(type) {
+      case 'exam':
+        return 'bg-red-50 border-red-300 text-red-900';
+      case 'homework':
+        return 'bg-green-50 border-green-300 text-green-900';
+      case 'exam-prep':
+        return 'bg-purple-50 border-purple-300 text-purple-900';
+      case 'review':
+        return 'bg-yellow-50 border-yellow-300 text-yellow-900';
+      case 'study':
+        return 'bg-blue-50 border-blue-300 text-blue-900';
+      default:
+        return 'bg-gray-50 border-gray-300 text-gray-900';
     }
-    
-    const totalDays = days.length;
-    const dayWidth = 100 / totalDays;
-    
-    // Calculate start position
-    let startOffset = 0;
-    if (task.startDate >= firstDay) {
-      const diffTime = task.startDate.getTime() - firstDay.getTime();
-      startOffset = (diffTime / (1000 * 60 * 60 * 24)) * dayWidth;
-    }
-    
-    // Calculate width
-    const taskStart = task.startDate < firstDay ? firstDay : task.startDate;
-    const taskEnd = task.endDate > lastDay ? lastDay : task.endDate;
-    const taskDuration = (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
-    const width = taskDuration * dayWidth;
-    
-    return {
-      left: `${startOffset}%`,
-      width: `${width}%`
-    };
   };
 
-  const getTimeEfficiency = (hour: number): number => {
-    // Calculate efficiency based on typical study patterns
-    if (hour >= 9 && hour <= 11) return 0.9; // Morning peak
-    if (hour >= 14 && hour <= 16) return 0.8; // Afternoon focus
-    if (hour >= 19 && hour <= 21) return 0.85; // Evening study
-    if (hour < 7 || hour > 23) return 0.2; // Very low efficiency
-    return 0.6; // Average
+  const getEventIcon = (type: CalendarEvent['type']) => {
+    switch(type) {
+      case 'exam':
+        return <AlertTriangle className="w-3 h-3" />;
+      case 'homework':
+        return <FileText className="w-3 h-3" />;
+      case 'exam-prep':
+        return <GraduationCap className="w-3 h-3" />;
+      case 'review':
+        return <RefreshCw className="w-3 h-3" />;
+      case 'study':
+        return <Brain className="w-3 h-3" />;
+      default:
+        return <Calendar className="w-3 h-3" />;
+    }
   };
 
-  const handleNavigate = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    if (viewMode === 'week') {
-      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+  // Stats calculation
+  const stats = {
+    totalEvents: calendarEvents.length,
+    exams: calendarEvents.filter(e => e.type === 'exam').length,
+    homework: calendarEvents.filter(e => e.type === 'homework').length,
+    todayEvents: getEventsForDate(today).length,
+    weekEvents: calendarEvents.filter(e => {
+      const weekFromNow = new Date(today);
+      weekFromNow.setDate(today.getDate() + 7);
+      return e.date >= today && e.date <= weekFromNow;
+    }).length
+  };
+
+  const handleDayClick = (date: Date | null) => {
+    if (!date) return;
+    setSelectedDate(date);
+    setShowDayPanel(true);
+  };
+
+  // Navigation
+  const previousMonth = () => {
+    const prev = new Date(currentMonth);
+    prev.setMonth(prev.getMonth() - 1);
+    setCurrentMonth(prev);
+  };
+
+  const nextMonth = () => {
+    const next = new Date(currentMonth);
+    next.setMonth(next.getMonth() + 1);
+    setCurrentMonth(next);
+  };
+
+  const goToToday = () => {
+    setCurrentMonth(new Date());
+  };
+
+  // Handle event completion
+  const handleEventComplete = (event: CalendarEvent) => {
+    if (event.type === 'exam' && event.relatedExamId) {
+      const exams = getExams();
+      const exam = exams.find(e => e.id === event.relatedExamId);
+      if (exam) {
+        exam.status = 'completed';
+        saveExam(exam);
+        toast.success(`✅ Verifica di ${exam.subject} completata!`);
+        setTimeout(() => generateCalendarEvents(), 100); // Refresh with small delay for smooth UX
+      }
+    } else if (event.type === 'homework' && event.relatedHomeworkId) {
+      const homework = getHomework();
+      const hw = homework.find(h => h.id === event.relatedHomeworkId);
+      if (hw) {
+        hw.status = 'completed';
+        saveHomework(hw);
+        toast.success(`✅ Compito di ${hw.subject} completato!`);
+        setTimeout(() => generateCalendarEvents(), 100); // Refresh with small delay for smooth UX
+      }
+    } else if ((event.type === 'review' || event.type === 'study') && event.id.includes('topic')) {
+      // Mark topic as completed
+      const topicId = event.id.split('-').pop();
+      if (topicId) {
+        const topics = getTopics();
+        const topic = topics.find(t => t.id === topicId);
+        if (topic) {
+          topic.completed = true;
+          saveTopic(topic);
+          toast.success(`✅ Argomento completato!`);
+          setTimeout(() => generateCalendarEvents(), 100); // Refresh with small delay for smooth UX
+        }
+      }
     } else {
-      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
-    }
-    setCurrentDate(newDate);
-  };
-
-  const formatDateHeader = (date: Date): string => {
-    if (viewMode === 'week') {
-      return date.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
-    }
-    return date.getDate().toString();
-  };
-
-  const getTaskTypeIcon = (type: GanttTask['type']) => {
-    switch(type) {
-      case 'exam-prep': return <Target className="w-4 h-4" />;
-      case 'homework': return <BookOpen className="w-4 h-4" />;
-      case 'review': return <RefreshCw className="w-4 h-4" />;
-      case 'study': return <Brain className="w-4 h-4" />;
-      case 'break': return <Coffee className="w-4 h-4" />;
-      default: return <Calendar className="w-4 h-4" />;
+      // For other types, just mark as completed in UI
+      toast.success('✅ Attività completata!');
+      setTimeout(() => generateCalendarEvents(), 100);
     }
   };
 
-  const getTaskTypeLabel = (type: GanttTask['type']) => {
-    switch(type) {
-      case 'exam-prep': return 'Preparazione Verifica';
-      case 'homework': return 'Compiti';
-      case 'review': return 'Ripasso';
-      case 'study': return 'Studio';
-      case 'break': return 'Pausa';
-      default: return 'Attività';
+  // Handle event deletion
+  const handleEventDelete = (event: CalendarEvent) => {
+    if (event.type === 'exam' && event.relatedExamId) {
+      deleteExam(event.relatedExamId);
+      toast.success('Verifica eliminata');
+    } else if (event.type === 'homework' && event.relatedHomeworkId) {
+      deleteHomework(event.relatedHomeworkId);
+      toast.success('Compito eliminato');
+    } else {
+      toast.info('Questo evento non può essere eliminato direttamente');
+      return;
     }
+    generateCalendarEvents(); // Refresh events
+    setShowEventDetail(false);
+    setSelectedEvent(null);
   };
 
-  if (loading) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-            <p className="text-gray-600">Generazione agenda intelligente...</p>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
+  // Navigate to edit page
+  const handleEventEdit = (event: CalendarEvent) => {
+    if (event.type === 'exam' && event.relatedExamId) {
+      window.location.href = `/exams?edit=${event.relatedExamId}`;
+    } else if (event.type === 'homework' && event.relatedHomeworkId) {
+      window.location.href = `/homework?edit=${event.relatedHomeworkId}`;
+    } else {
+      toast.info('Modifica non disponibile per questo tipo di evento');
+    }
+  };
 
   return (
     <AppLayout>
@@ -377,314 +423,576 @@ export default function AgendaPage() {
         <div className="mb-6">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Agenda Intelligente</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Agenda Studio</h1>
               <p className="text-gray-600">
-                Pianificazione automatica basata su priorità, difficoltà e tempo disponibile
+                Visualizza e organizza tutte le tue attività di studio in un unico calendario
               </p>
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => setShowSettings(true)}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+                onClick={() => setViewMode(viewMode === 'calendar' ? 'list' : 'calendar')}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
               >
-                <Settings className="w-5 h-5" />
-                Preferenze
+                {viewMode === 'calendar' ? <List className="w-5 h-5" /> : <CalendarDays className="w-5 h-5" />}
+                {viewMode === 'calendar' ? 'Vista Lista' : 'Vista Calendario'}
               </button>
               <button
-                onClick={generateTasks}
+                onClick={generateCalendarEvents}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
               >
                 <RefreshCw className="w-5 h-5" />
-                Rigenera Piano
+                Aggiorna
               </button>
             </div>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {tasks.filter(t => t.type === 'exam-prep').length}
-                </p>
-                <p className="text-sm text-gray-600">Verifiche in preparazione</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.totalEvents}</p>
+                <p className="text-sm text-gray-600">Eventi Totali</p>
               </div>
-              <Target className="w-8 h-8 text-purple-600" />
+              <Calendar className="w-8 h-8 text-blue-600" />
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {tasks.filter(t => t.type === 'homework').length}
-                </p>
-                <p className="text-sm text-gray-600">Compiti da fare</p>
+                <p className="text-2xl font-bold text-red-600">{stats.exams}</p>
+                <p className="text-sm text-gray-600">Verifiche</p>
               </div>
-              <BookOpen className="w-8 h-8 text-green-600" />
+              <AlertTriangle className="w-8 h-8 text-red-600" />
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {tasks.reduce((acc, t) => acc + t.estimatedHours, 0).toFixed(1)}h
-                </p>
-                <p className="text-sm text-gray-600">Tempo stimato totale</p>
+                <p className="text-2xl font-bold text-green-600">{stats.homework}</p>
+                <p className="text-sm text-gray-600">Compiti</p>
               </div>
-              <Clock className="w-8 h-8 text-blue-600" />
+              <FileText className="w-8 h-8 text-green-600" />
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {Math.round(tasks.filter(t => t.priority === 'high').length / tasks.length * 100)}%
-                </p>
-                <p className="text-sm text-gray-600">Priorità alta</p>
+                <p className="text-2xl font-bold text-purple-600">{stats.todayEvents}</p>
+                <p className="text-sm text-gray-600">Oggi</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-orange-600" />
+              <Zap className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-2xl font-bold text-orange-600">{stats.weekEvents}</p>
+                <p className="text-sm text-gray-600">Questa Settimana</p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-orange-600" />
             </div>
           </div>
         </div>
 
-        {/* Controls */}
+        {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* View Mode & Navigation */}
-            <div className="flex items-center gap-4">
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setViewMode('week')}
-                  className={`px-3 py-1.5 rounded-l-lg transition-colors ${
-                    viewMode === 'week'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Settimana
-                </button>
-                <button
-                  onClick={() => setViewMode('month')}
-                  className={`px-3 py-1.5 rounded-r-lg transition-colors ${
-                    viewMode === 'month'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Mese
-                </button>
-              </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-gray-600" />
+              <span className="text-sm font-medium text-gray-700">Filtra per:</span>
+            </div>
 
-              <div className="flex items-center gap-2">
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">Tutti i tipi</option>
+              <option value="exam">Verifiche</option>
+              <option value="homework">Compiti</option>
+              <option value="exam-prep">Preparazione</option>
+              <option value="review">Ripasso</option>
+              <option value="study">Studio</option>
+            </select>
+
+            <select
+              value={filterSubject}
+              onChange={(e) => setFilterSubject(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">Tutte le materie</option>
+              {subjects.map(subject => (
+                <option key={subject.id} value={subject.name}>{subject.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Calendar View */}
+        {viewMode === 'calendar' && (
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            {/* Calendar Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4">
+              <div className="flex items-center justify-between">
                 <button
-                  onClick={() => handleNavigate('prev')}
-                  className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                  onClick={previousMonth}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
-                <span className="font-medium text-gray-900 min-w-[150px] text-center">
-                  {viewMode === 'week'
-                    ? `${currentDate.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })} - ${new Date(currentDate.getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}`
-                    : currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-                  }
-                </span>
+
+                <div className="text-center">
+                  <h2 className="text-xl font-semibold">
+                    {currentMonth.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+                  </h2>
+                  <button
+                    onClick={goToToday}
+                    className="text-sm text-white/80 hover:text-white mt-1"
+                  >
+                    Vai a oggi
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => handleNavigate('next')}
-                  className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                  onClick={nextMonth}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Filters */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-gray-600" />
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">Tutti i tipi</option>
-                  <option value="exam-prep">Preparazione verifiche</option>
-                  <option value="homework">Compiti</option>
-                  <option value="review">Ripasso</option>
-                  <option value="study">Studio</option>
-                </select>
-              </div>
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 gap-px bg-gray-200">
+              {/* Day Headers */}
+              {['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'].map(day => (
+                <div key={day} className="bg-gray-50 p-3 text-center text-sm font-medium text-gray-700">
+                  {day}
+                </div>
+              ))}
 
-              <select
-                value={filterSubject}
-                onChange={(e) => setFilterSubject(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">Tutte le materie</option>
-                {subjects.map(subject => (
-                  <option key={subject.name} value={subject.name}>
-                    {subject.displayName || subject.name}
-                  </option>
-                ))}
-              </select>
+              {/* Calendar Days */}
+              {daysInMonth.map((date, index) => {
+                const eventsForDay = date ? getEventsForDate(date) : [];
+                const isToday = date && date.toDateString() === today.toDateString();
+                const isCurrentMonth = date && date.getMonth() === currentMonth.getMonth();
+                const isSelected = selectedDate && date && date.toDateString() === selectedDate.toDateString();
+                const hasExam = eventsForDay.some(e => e.type === 'exam');
+                const hasHighPriority = eventsForDay.some(e => e.priority === 'high');
+
+                return (
+                  <div
+                    key={index}
+                    className={`bg-white p-2 min-h-[110px] relative border ${
+                      !isCurrentMonth ? 'bg-gray-50' : ''
+                    } ${isToday ? 'bg-blue-50 ring-2 ring-blue-500 ring-inset' : ''} ${
+                      isSelected ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-inset' : ''
+                    } ${date ? 'hover:bg-gray-50 cursor-pointer' : ''} 
+                    ${hasExam ? 'border-red-200' : hasHighPriority ? 'border-orange-200' : 'border-gray-100'}
+                    transition-all duration-200`}
+                    onClick={() => handleDayClick(date)}
+                    onMouseEnter={() => setHoveredDate(date)}
+                    onMouseLeave={() => setHoveredDate(null)}
+                  >
+                    {date && (
+                      <>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className={`text-sm font-bold ${
+                            isToday ? 'text-blue-600' : 
+                            !isCurrentMonth ? 'text-gray-400' : 'text-gray-900'
+                          }`}>
+                            {date.getDate()}
+                          </div>
+                          {eventsForDay.length > 0 && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                              hasExam ? 'bg-red-100 text-red-700' :
+                              hasHighPriority ? 'bg-orange-100 text-orange-700' :
+                              'bg-blue-100 text-blue-700'
+                            }`}>
+                              {eventsForDay.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Events Display - Simplified Stack */}
+                        {eventsForDay.length > 0 && (
+                          <div className="space-y-1">
+                            {/* Show first 2-3 events as small pills */}
+                            {eventsForDay.slice(0, 3).map((event, idx) => {
+                              const Icon = getEventIcon(event.type);
+                              return (
+                                <div
+                                  key={event.id}
+                                  className={`px-1.5 py-0.5 rounded text-xs flex items-center gap-1 relative ${
+                                    event.completed ? (
+                                      'bg-gray-100 text-gray-600 line-through'
+                                    ) : (
+                                      event.type === 'exam' ? 'bg-red-100 text-red-700' :
+                                      event.type === 'homework' ? 'bg-green-100 text-green-700' :
+                                      event.type === 'exam-prep' ? 'bg-purple-100 text-purple-700' :
+                                      event.type === 'review' ? 'bg-yellow-100 text-yellow-700' :
+                                      'bg-blue-100 text-blue-700'
+                                    )
+                                  }`}
+                                >
+                                  <div className="flex-shrink-0">
+                                    {React.cloneElement(Icon, { className: 'w-3 h-3' })}
+                                  </div>
+                                  <span className="truncate font-medium flex items-center gap-1">
+                                    {event.title.length > 15 ? event.title.substring(0, 15) + '...' : event.title}
+                                    {event.completed && (
+                                      <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
+                                    )}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            
+                            {/* Show +N more if there are more events */}
+                            {eventsForDay.length > 3 && (
+                              <div className="text-xs text-gray-500 font-medium text-center">
+                                +{eventsForDay.length - 3} altri
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Gantt Chart */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" />
-              Diagramma di Gantt
-            </h2>
-          </div>
-
-          <div className="overflow-x-auto">
-            <div className="min-w-[800px]">
-              {/* Timeline Header */}
-              <div className="flex border-b border-gray-200 bg-gray-50">
-                <div className="w-48 p-3 border-r border-gray-200">
-                  <span className="text-sm font-medium text-gray-700">Attività</span>
-                </div>
-                <div className="flex-1 flex">
-                  {calendarDays.map((day, index) => {
-                    const isToday = day.toDateString() === new Date().toDateString();
-                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                    
-                    return (
-                      <div
-                        key={index}
-                        className={`flex-1 p-3 text-center border-r border-gray-200 ${
-                          isToday ? 'bg-blue-50' : isWeekend ? 'bg-gray-100' : ''
-                        }`}
-                      >
-                        <div className={`text-sm font-medium ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>
-                          {formatDateHeader(day)}
+        {/* List View */}
+        {viewMode === 'list' && (
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Prossimi Eventi</h2>
+              <div className="space-y-3">
+                {calendarEvents
+                  .filter(event => {
+                    if (filterType !== 'all' && event.type !== filterType) return false;
+                    if (filterSubject !== 'all' && event.subject !== filterSubject) return false;
+                    return event.date >= today;
+                  })
+                  .sort((a, b) => a.date.getTime() - b.date.getTime())
+                  .slice(0, 20)
+                  .map(event => (
+                    <div
+                      key={event.id}
+                      className={`p-4 rounded-lg border-2 hover:shadow-md transition-all ${
+                        getEventTypeStyle(event.type)
+                      } ${event.completed ? 'opacity-60' : ''}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {/* Checkbox for completable events */}
+                          {(event.type === 'exam' || event.type === 'homework') && (
+                            <div className="flex-shrink-0">
+                              <input
+                                type="checkbox"
+                                checked={event.completed}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleEventComplete(event);
+                                }}
+                                className="w-5 h-5 text-green-600 rounded cursor-pointer"
+                              />
+                            </div>
+                          )}
+                          <div 
+                            className="flex-shrink-0 cursor-pointer"
+                            onClick={() => {
+                              setSelectedEvent(event);
+                              setShowEventDetail(true);
+                            }}
+                          >
+                            {getEventIcon(event.type)}
+                          </div>
+                          <div 
+                            className="flex-1 cursor-pointer"
+                            onClick={() => {
+                              setSelectedEvent(event);
+                              setShowEventDetail(true);
+                            }}
+                          >
+                            <h3 className={`font-semibold text-gray-900 ${
+                              event.completed ? 'line-through' : ''
+                            }`}>
+                              {event.title}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
+                              <span>{event.subject}</span>
+                              <span>•</span>
+                              <span>{event.date.toLocaleDateString('it-IT')}</span>
+                              {event.estimatedHours && (
+                                <>
+                                  <span>•</span>
+                                  <span>{event.estimatedHours}h</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        {isToday && (
-                          <div className="text-xs text-blue-600 mt-0.5">Oggi</div>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {event.priority === 'high' && (
+                            <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                              Alta priorità
+                            </span>
+                          )}
+                          {event.difficulty && (
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                              event.difficulty === 'hard' ? 'bg-red-100 text-red-700' :
+                              event.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {event.difficulty === 'hard' ? 'Difficile' :
+                               event.difficulty === 'medium' ? 'Medio' : 'Facile'}
+                            </span>
+                          )}
+                          {/* Quick action buttons */}
+                          {(event.type === 'exam' || event.type === 'homework') && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEventEdit(event);
+                                }}
+                                className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors"
+                                title="Modifica"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Sei sicuro di voler eliminare questo evento?')) {
+                                    handleEventDelete(event);
+                                  }
+                                }}
+                                className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                                title="Elimina"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Day Events Panel - Shows all events for selected day */}
+        {showDayPanel && selectedDate && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold">
+                      {selectedDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    </h2>
+                    <p className="text-blue-100 mt-1">
+                      {getEventsForDate(selectedDate).length} eventi programmati
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowDayPanel(false);
+                      setSelectedDate(null);
+                    }}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
                 </div>
               </div>
-
-              {/* Task Rows */}
-              <div className="divide-y divide-gray-200">
-                {filteredTasks.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
-                    <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>Nessuna attività da mostrare</p>
+              
+              {/* Events List */}
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                {getEventsForDate(selectedDate).length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Group events by type */}
+                    {['exam', 'homework', 'exam-prep', 'review', 'study'].map(type => {
+                      const eventsOfType = getEventsForDate(selectedDate).filter(e => e.type === type);
+                      if (eventsOfType.length === 0) return null;
+                      
+                      return (
+                        <div key={type} className="mb-6">
+                          <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+                            {getEventIcon(type as CalendarEvent['type'])}
+                            <span>
+                              {type === 'exam' ? 'Verifiche' :
+                               type === 'homework' ? 'Compiti' :
+                               type === 'exam-prep' ? 'Preparazione Verifiche' :
+                               type === 'review' ? 'Ripasso' : 'Studio'}
+                            </span>
+                            <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+                              {eventsOfType.length}
+                            </span>
+                          </h3>
+                          
+                          <div className="space-y-3">
+                            {eventsOfType.map(event => (
+                              <div
+                                key={event.id}
+                                className={`p-4 rounded-lg border-2 cursor-pointer hover:shadow-md transition-all ${
+                                  getEventTypeStyle(event.type)
+                                } ${event.completed ? 'opacity-60' : ''}`}
+                                onClick={() => {
+                                  setSelectedEvent(event);
+                                  setShowEventDetail(true);
+                                }}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h4 className={`font-semibold text-gray-900 mb-1 ${
+                                      event.completed ? 'line-through' : ''
+                                    }`}>
+                                      {event.title}
+                                    </h4>
+                                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                                      <span className="flex items-center gap-1">
+                                        <BookOpen className="w-4 h-4" />
+                                        {event.subject}
+                                      </span>
+                                      {event.estimatedHours && (
+                                        <span className="flex items-center gap-1">
+                                          <Clock className="w-4 h-4" />
+                                          {event.estimatedHours}h
+                                        </span>
+                                      )}
+                                      {event.description && (
+                                        <span className="text-gray-500 italic">
+                                          {event.description}
+                                        </span>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Action buttons */}
+                                    <div className="flex items-center gap-2 mt-3">
+                                      {!event.completed && (event.type === 'exam' || event.type === 'homework') && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEventComplete(event);
+                                          }}
+                                          className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-1"
+                                        >
+                                          <CheckCircle2 className="w-4 h-4" />
+                                          Completa
+                                        </button>
+                                      )}
+                                      {(event.type === 'exam' || event.type === 'homework') && (
+                                        <>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleEventEdit(event);
+                                            }}
+                                            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-1"
+                                          >
+                                            <Edit2 className="w-4 h-4" />
+                                            Modifica
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (confirm('Sei sicuro di voler eliminare questo evento?')) {
+                                                handleEventDelete(event);
+                                              }
+                                            }}
+                                            className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-1"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                            Elimina
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex flex-col items-end gap-2">
+                                    {event.priority === 'high' && (
+                                      <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                                        Alta priorità
+                                      </span>
+                                    )}
+                                    {event.difficulty && (
+                                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                        event.difficulty === 'hard' ? 'bg-red-100 text-red-700' :
+                                        event.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                        'bg-green-100 text-green-700'
+                                      }`}>
+                                        {event.difficulty === 'hard' ? 'Difficile' :
+                                         event.difficulty === 'medium' ? 'Media' : 'Facile'}
+                                      </span>
+                                    )}
+                                    {event.completed && (
+                                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
-                  filteredTasks.map(task => {
-                    const position = getTaskPosition(task, calendarDays);
-                    if (!position) return null;
-
-                    return (
-                      <div key={task.id} className="flex hover:bg-gray-50 transition-colors">
-                        {/* Task Info */}
-                        <div className="w-48 p-3 border-r border-gray-200">
-                          <div className="flex items-start gap-2">
-                            <div className={`mt-0.5 ${task.completed ? 'text-green-600' : 'text-gray-400'}`}>
-                              {getTaskTypeIcon(task.type)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium text-gray-900 truncate ${
-                                task.completed ? 'line-through' : ''
-                              }`}>
-                                {task.title}
-                              </p>
-                              <p className="text-xs text-gray-500">{task.subject}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Gantt Bar */}
-                        <div className="flex-1 relative p-2">
-                          <div className="relative h-8">
-                            <div
-                              className={`absolute h-full rounded flex items-center px-2 cursor-pointer transition-all hover:opacity-90 ${
-                                task.completed ? 'opacity-60' : ''
-                              }`}
-                              style={{
-                                left: position.left,
-                                width: position.width,
-                                backgroundColor: task.color + '20',
-                                borderLeft: `3px solid ${task.color}`,
-                              }}
-                              onClick={() => setSelectedTask(task)}
-                            >
-                              {/* Progress Bar */}
-                              <div
-                                className="absolute left-0 top-0 h-full rounded opacity-30"
-                                style={{
-                                  width: `${task.progress}%`,
-                                  backgroundColor: task.color
-                                }}
-                              />
-                              
-                              {/* Task Content */}
-                              <div className="relative z-10 flex items-center justify-between w-full">
-                                <span className="text-xs font-medium text-gray-700 truncate">
-                                  {task.estimatedHours}h
-                                </span>
-                                {task.priority === 'high' && (
-                                  <AlertCircle className="w-3 h-3 text-red-600 ml-1" />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
+                  <div className="text-center py-12">
+                    <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">Nessun evento programmato per questo giorno</p>
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="p-4 border-t border-gray-200 bg-gray-50">
-            <div className="flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-purple-600" />
-                <span className="text-gray-600">Preparazione Verifica</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-green-600" />
-                <span className="text-gray-600">Compiti</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-blue-600" />
-                <span className="text-gray-600">Ripasso</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Brain className="w-4 h-4 text-orange-600" />
-                <span className="text-gray-600">Studio</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-600" />
-                <span className="text-gray-600">Alta Priorità</span>
+              
+              {/* Footer with actions */}
+              <div className="border-t border-gray-200 p-4 bg-gray-50">
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-600">
+                    {getEventsForDate(selectedDate).filter(e => e.completed).length} di {getEventsForDate(selectedDate).length} completati
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowDayPanel(false);
+                      setSelectedDate(null);
+                    }}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                  >
+                    Chiudi
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Task Details Modal */}
-        {selectedTask && (
+        {/* Event Detail Modal */}
+        {showEventDetail && selectedEvent && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Dettagli Attività</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Dettagli Evento</h3>
                 <button
-                  onClick={() => setSelectedTask(null)}
+                  onClick={() => {
+                    setShowEventDetail(false);
+                    setSelectedEvent(null);
+                  }}
                   className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -694,230 +1002,171 @@ export default function AgendaPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Titolo</p>
-                  <p className="font-medium text-gray-900">{selectedTask.title}</p>
+                  <p className="font-medium text-gray-900">{selectedEvent.title}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Tipo</p>
                     <div className="flex items-center gap-2">
-                      {getTaskTypeIcon(selectedTask.type)}
-                      <span className="text-gray-900">{getTaskTypeLabel(selectedTask.type)}</span>
+                      {getEventIcon(selectedEvent.type)}
+                      <span className="text-gray-900">
+                        {selectedEvent.type === 'exam' ? 'Verifica' :
+                         selectedEvent.type === 'homework' ? 'Compito' :
+                         selectedEvent.type === 'exam-prep' ? 'Preparazione' :
+                         selectedEvent.type === 'review' ? 'Ripasso' : 'Studio'}
+                      </span>
                     </div>
                   </div>
                   
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Materia</p>
-                    <p className="text-gray-900">{selectedTask.subject}</p>
+                    <p className="text-gray-900">{selectedEvent.subject}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Priorità</p>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      selectedTask.priority === 'high' ? 'bg-red-100 text-red-700' :
-                      selectedTask.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {selectedTask.priority === 'high' ? 'Alta' :
-                       selectedTask.priority === 'medium' ? 'Media' : 'Bassa'}
-                    </span>
+                    <p className="text-sm text-gray-600 mb-1">Data</p>
+                    <p className="text-gray-900">
+                      {selectedEvent.date.toLocaleDateString('it-IT', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long'
+                      })}
+                    </p>
                   </div>
                   
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Difficoltà</p>
+                    <p className="text-sm text-gray-600 mb-1">Priorità</p>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      selectedTask.difficulty === 'hard' ? 'bg-red-100 text-red-700' :
-                      selectedTask.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                      selectedEvent.priority === 'high' ? 'bg-red-100 text-red-700' :
+                      selectedEvent.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
                       'bg-green-100 text-green-700'
                     }`}>
-                      {selectedTask.difficulty === 'hard' ? 'Difficile' :
-                       selectedTask.difficulty === 'medium' ? 'Media' : 'Facile'}
+                      {selectedEvent.priority === 'high' ? 'Alta' :
+                       selectedEvent.priority === 'medium' ? 'Media' : 'Bassa'}
                     </span>
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Periodo</p>
-                  <p className="text-gray-900">
-                    {selectedTask.startDate.toLocaleDateString('it-IT')} - {selectedTask.endDate.toLocaleDateString('it-IT')}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Tempo stimato</p>
-                  <p className="text-gray-900">{selectedTask.estimatedHours} ore</p>
-                </div>
-
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Progresso</p>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all"
-                        style={{ width: `${selectedTask.progress}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-gray-700">{selectedTask.progress}%</span>
+                {selectedEvent.estimatedHours && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Tempo stimato</p>
+                    <p className="text-gray-900">{selectedEvent.estimatedHours} ore</p>
                   </div>
-                </div>
+                )}
 
-                {selectedTask.description && (
+                {selectedEvent.description && (
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Descrizione</p>
-                    <p className="text-gray-900">{selectedTask.description}</p>
+                    <p className="text-gray-900">{selectedEvent.description}</p>
+                  </div>
+                )}
+
+                {selectedEvent.difficulty && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Difficoltà</p>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      selectedEvent.difficulty === 'hard' ? 'bg-red-100 text-red-700' :
+                      selectedEvent.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-green-100 text-green-700'
+                    }`}>
+                      {selectedEvent.difficulty === 'hard' ? 'Difficile' :
+                       selectedEvent.difficulty === 'medium' ? 'Media' : 'Facile'}
+                    </span>
                   </div>
                 )}
               </div>
 
-              <div className="mt-6 flex gap-3">
-                <button
-                  onClick={() => {
-                    toast.info('Funzionalità in sviluppo');
-                  }}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Modifica
-                </button>
-                <button
-                  onClick={() => setSelectedTask(null)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Chiudi
-                </button>
+              <div className="mt-6 space-y-3">
+                {/* Action buttons based on event type */}
+                {(selectedEvent.type === 'exam' || selectedEvent.type === 'homework') && (
+                  <div className="flex gap-3">
+                    {!selectedEvent.completed && (
+                      <button
+                        onClick={() => {
+                          handleEventComplete(selectedEvent);
+                          setShowEventDetail(false);
+                          setSelectedEvent(null);
+                        }}
+                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle2 className="w-5 h-5" />
+                        Segna come Completato
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        handleEventEdit(selectedEvent);
+                      }}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                      Modifica
+                    </button>
+                  </div>
+                )}
+                
+                <div className="flex gap-3">
+                  {(selectedEvent.type === 'exam' || selectedEvent.type === 'homework') && (
+                    <button
+                      onClick={() => {
+                        if (confirm('Sei sicuro di voler eliminare questo evento?')) {
+                          handleEventDelete(selectedEvent);
+                        }
+                      }}
+                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                      Elimina
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowEventDetail(false);
+                      setSelectedEvent(null);
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Chiudi
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Settings Modal */}
-        {showSettings && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Preferenze Studio</h3>
-                <button
-                  onClick={() => setShowSettings(false)}
-                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Inizio giornata
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="23"
-                      value={studyPreferences.morningStart}
-                      onChange={(e) => setStudyPreferences({
-                        ...studyPreferences,
-                        morningStart: parseInt(e.target.value)
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Fine giornata
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="23"
-                      value={studyPreferences.eveningEnd}
-                      onChange={(e) => setStudyPreferences({
-                        ...studyPreferences,
-                        eveningEnd: parseInt(e.target.value)
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Durata sessione (min)
-                    </label>
-                    <input
-                      type="number"
-                      min="15"
-                      max="120"
-                      step="15"
-                      value={studyPreferences.sessionDuration}
-                      onChange={(e) => setStudyPreferences({
-                        ...studyPreferences,
-                        sessionDuration: parseInt(e.target.value)
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Pausa (min)
-                    </label>
-                    <input
-                      type="number"
-                      min="5"
-                      max="30"
-                      step="5"
-                      value={studyPreferences.breakDuration}
-                      onChange={(e) => setStudyPreferences({
-                        ...studyPreferences,
-                        breakDuration: parseInt(e.target.value)
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="avoidWeekends"
-                    checked={studyPreferences.avoidWeekends}
-                    onChange={(e) => setStudyPreferences({
-                      ...studyPreferences,
-                      avoidWeekends: e.target.checked
-                    })}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <label htmlFor="avoidWeekends" className="text-sm text-gray-700">
-                    Evita pianificazione nel weekend
-                  </label>
-                </div>
-              </div>
-
-              <div className="mt-6 flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowSettings(false);
-                    generateTasks();
-                    toast.success('Preferenze salvate e piano rigenerato');
-                  }}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Salva e Rigenera
-                </button>
-                <button
-                  onClick={() => setShowSettings(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annulla
-                </button>
-              </div>
+        {/* Legend */}
+        <div className="mt-6 bg-white rounded-xl shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Legenda</h3>
+          <div className="flex flex-wrap gap-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+              <span className="text-sm text-gray-600">Verifica</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-green-600" />
+              <span className="text-sm text-gray-600">Compito</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-purple-600" />
+              <span className="text-sm text-gray-600">Preparazione</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-yellow-600" />
+              <span className="text-sm text-gray-600">Ripasso</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4 text-blue-600" />
+              <span className="text-sm text-gray-600">Studio</span>
+            </div>
+            <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-200">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <span className="text-sm text-gray-600">Alta priorità</span>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </AppLayout>
   );

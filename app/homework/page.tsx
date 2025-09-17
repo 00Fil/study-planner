@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
+import './calendar-animations.css';
 import {
   BookOpen,
   Plus,
@@ -34,7 +35,8 @@ import {
   Square,
   List,
   Grid3x3,
-  CalendarDays
+  CalendarDays,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
@@ -42,8 +44,9 @@ import {
   saveHomework, 
   deleteHomework,
   getSubjects,
-  getTopicsBySubject
-} from '@/lib/storage';
+  getTopicsBySubject,
+  getExams
+} from '@/lib/supabase-storage';
 import { Homework, Subject, Topic } from '@/lib/types';
 
 type ViewMode = 'list' | 'grid' | 'calendar';
@@ -63,6 +66,11 @@ export default function HomeworkPage() {
   const [sortBy, setSortBy] = useState<SortBy>('dueDate');
   const [sortAscending, setSortAscending] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [clickedDate, setClickedDate] = useState<Date | null>(null);
+  const [clickedRect, setClickedRect] = useState<DOMRect | null>(null);
+  const [carouselIndexes, setCarouselIndexes] = useState<{ [key: string]: number }>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   
   const [formData, setFormData] = useState<Partial<Homework>>({
     subject: '',
@@ -80,27 +88,39 @@ export default function HomeworkPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const loadedHomework = getHomework();
-    // Update overdue status
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const updatedHomework = loadedHomework.map(hw => {
-      const dueDate = new Date(hw.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [loadedHomework, loadedSubjects] = await Promise.all([
+        getHomework(),
+        getSubjects()
+      ]);
       
-      if (hw.status === 'pending' && dueDate < today) {
-        return { ...hw, status: 'overdue' as const };
-      }
-      return hw;
-    });
-    
-    setHomework(updatedHomework);
-    setSubjects(getSubjects());
+      // Update overdue status
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const updatedHomework = loadedHomework.map(hw => {
+        const dueDate = new Date(hw.due_date);
+        dueDate.setHours(0, 0, 0, 0);
+        
+        if (hw.status === 'pending' && dueDate < today) {
+          return { ...hw, status: 'pending' as const }; // Keep as pending, we'll show overdue visually
+        }
+        return hw;
+      });
+      
+      setHomework(updatedHomework);
+      setSubjects(loadedSubjects);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Errore nel caricamento dei dati');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.subject || !formData.description || !formData.dueDate) {
@@ -108,28 +128,37 @@ export default function HomeworkPage() {
       return;
     }
 
-    const homeworkData: Homework = {
-      id: editingHomework?.id || `homework-${Date.now()}`,
-      subject: formData.subject,
-      description: formData.description,
-      dueDate: formData.dueDate,
-      assignedDate: formData.assignedDate || new Date().toISOString().split('T')[0],
-      priority: formData.priority || 'medium',
-      status: formData.status || 'pending',
-      estimatedHours: formData.estimatedHours || 1,
-      notes: formData.notes,
-      topics: formData.topics,
-      completedDate: formData.status === 'completed' ? new Date().toISOString().split('T')[0] : undefined
-    };
+    setSaving(true);
+    try {
+      const homeworkData: Homework = {
+        id: editingHomework?.id || `homework-${Date.now()}`,
+        subject: formData.subject!,
+        title: formData.description!,
+        description: formData.notes,
+        dueDate: formData.dueDate!,
+        priority: formData.priority || 'medium',
+        status: formData.status || 'pending',
+        estimatedHours: formData.estimatedHours || 1,
+        actualHours: 0,
+        attachments: [],
+        notes: formData.notes,
+        completedDate: formData.status === 'completed' ? new Date().toISOString() : undefined
+      };
 
-    saveHomework(homeworkData);
-    loadData();
-    
-    toast.success(editingHomework ? 'Compito aggiornato' : 'Compito aggiunto');
-    
-    setShowAddModal(false);
-    setEditingHomework(null);
-    resetForm();
+      await saveHomework(homeworkData);
+      await loadData();
+      
+      toast.success(editingHomework ? 'Compito aggiornato' : 'Compito aggiunto');
+      
+      setShowAddModal(false);
+      setEditingHomework(null);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving homework:', error);
+      toast.error('Errore nel salvataggio del compito');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEdit = (hw: Homework) => {
@@ -148,24 +177,40 @@ export default function HomeworkPage() {
     setShowAddModal(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Sei sicuro di voler eliminare questo compito?')) {
-      deleteHomework(id);
-      loadData();
-      toast.success('Compito eliminato');
+      setSaving(true);
+      try {
+        await deleteHomework(id);
+        await loadData();
+        toast.success('Compito eliminato');
+      } catch (error) {
+        console.error('Error deleting homework:', error);
+        toast.error('Errore nell\'eliminazione del compito');
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
-  const handleToggleComplete = (hw: Homework) => {
-    const updatedHomework: Homework = {
-      ...hw,
-      status: hw.status === 'completed' ? 'pending' : 'completed',
-      completedDate: hw.status === 'pending' ? new Date().toISOString().split('T')[0] : undefined
-    };
-    
-    saveHomework(updatedHomework);
-    loadData();
-    toast.success(updatedHomework.status === 'completed' ? 'Compito completato!' : 'Compito riaperto');
+  const handleToggleComplete = async (hw: Homework) => {
+    setSaving(true);
+    try {
+      const updatedHomework: Homework = {
+        ...hw,
+        status: hw.status === 'completed' ? 'pending' : 'completed',
+        completedDate: hw.status === 'pending' ? new Date().toISOString() : undefined
+      };
+      
+      await saveHomework(updatedHomework);
+      await loadData();
+      toast.success(updatedHomework.status === 'completed' ? 'Compito completato!' : 'Compito riaperto');
+    } catch (error) {
+      console.error('Error toggling complete:', error);
+      toast.error('Errore nell\'aggiornamento del compito');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleQuickAdd = () => {
@@ -310,9 +355,31 @@ export default function HomeworkPage() {
     toast.success('Compiti esportati');
   };
 
+  // Popup handlers - moved to component level
+  const closePopup = () => {
+    setClickedDate(null);
+    setClickedRect(null);
+  };
+
   const CalendarView = () => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const today = new Date();
+    
+    // Auto-play carousel
+    useEffect(() => {
+      const interval = setInterval(() => {
+        // Auto-advance all carousels
+        const allDates = getDaysInMonth().filter(d => d !== null) as Date[];
+        allDates.forEach(date => {
+          const homeworkCount = getHomeworkForDate(date).length;
+          if (homeworkCount > 1) {
+            nextSlide(date.toISOString(), homeworkCount);
+          }
+        });
+      }, 4000); // Change slide every 4 seconds
+      
+      return () => clearInterval(interval);
+    }, [currentMonth]);
     
     const navigateMonth = (direction: 'prev' | 'next') => {
       setCurrentMonth(prev => {
@@ -324,6 +391,14 @@ export default function HomeworkPage() {
         }
         return newDate;
       });
+    };
+    
+    const handleDayClick = (date: Date | null, event: React.MouseEvent) => {
+      if (date) {
+        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+        setClickedRect(rect);
+        setClickedDate(date);
+      }
     };
     
     const getDaysInMonth = () => {
@@ -356,10 +431,39 @@ export default function HomeworkPage() {
     
     const getHomeworkForDate = (date: Date | null) => {
       if (!date) return [];
-      return homework.filter(hw => {
+      const homeworkForDay = homework.filter(hw => {
         const hwDate = new Date(hw.dueDate);
         return hwDate.toDateString() === date.toDateString();
       });
+      
+      // Sort by urgency (overdue first, then by priority) and time required
+      return homeworkForDay.sort((a, b) => {
+        // First sort by status (overdue first)
+        if (a.status === 'overdue' && b.status !== 'overdue') return -1;
+        if (b.status === 'overdue' && a.status !== 'overdue') return 1;
+        
+        // Then by priority
+        const priorityOrder = { high: 3, medium: 2, low: 1 };
+        const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+        if (priorityDiff !== 0) return priorityDiff;
+        
+        // Finally by estimated hours (more time required first)
+        return (b.estimatedHours || 0) - (a.estimatedHours || 0);
+      });
+    };
+    
+    const nextSlide = (dateKey: string, maxSlides: number) => {
+      setCarouselIndexes(prev => ({
+        ...prev,
+        [dateKey]: ((prev[dateKey] || 0) + 1) % maxSlides
+      }));
+    };
+    
+    const prevSlide = (dateKey: string, maxSlides: number) => {
+      setCarouselIndexes(prev => ({
+        ...prev,
+        [dateKey]: ((prev[dateKey] || 0) - 1 + maxSlides) % maxSlides
+      }));
     };
     
     const daysInMonth = getDaysInMonth();
@@ -399,50 +503,141 @@ export default function HomeworkPage() {
             const homeworkForDay = date ? getHomeworkForDate(date) : [];
             const isToday = date && date.toDateString() === today.toDateString();
             const isCurrentMonth = date && date.getMonth() === currentMonth.getMonth();
+            const isClicked = date && clickedDate && date.toDateString() === clickedDate.toDateString();
+            const hasHomework = homeworkForDay.length > 0;
             
             return (
               <div
                 key={index}
-                className={`bg-white p-2 min-h-[100px] ${
+                className={`bg-white p-2 min-h-[100px] relative ${
                   !isCurrentMonth ? 'bg-gray-50' : ''
                 } ${isToday ? 'bg-blue-50 ring-2 ring-blue-500 ring-inset' : ''} 
-                ${date ? 'hover:bg-gray-50 cursor-pointer' : ''} transition-colors`}
-                onClick={() => date && setSelectedDate(date)}
+                ${isClicked ? 'calendar-day-active' : ''}
+                ${hasHomework ? 'calendar-day-with-tasks' : ''}
+                ${date ? 'hover:bg-gray-50 cursor-pointer calendar-day-hover' : ''} transition-all duration-200`}
+                onClick={(e) => handleDayClick(date, e)}
               >
                 {date && (
                   <>
-                    <div className={`text-sm font-medium mb-1 ${
-                      isToday ? 'text-blue-600' : 
-                      !isCurrentMonth ? 'text-gray-400' : 'text-gray-900'
-                    }`}>
-                      {date.getDate()}
-                    </div>
-                    <div className="space-y-1">
-                      {homeworkForDay.slice(0, 3).map(hw => (
-                        <div
-                          key={hw.id}
-                          className={`text-xs p-1 rounded truncate cursor-pointer hover:opacity-80 ${
-                            hw.status === 'completed' ? 'bg-green-100 text-green-700 line-through' :
-                            hw.status === 'overdue' ? 'bg-red-100 text-red-700' :
-                            hw.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-                            hw.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}
-                          title={`${hw.subject}: ${hw.description}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(hw);
-                          }}
-                        >
-                          {hw.subject.length > 8 ? hw.subject.substring(0, 8) + '...' : hw.subject}
-                        </div>
-                      ))}
-                      {homeworkForDay.length > 3 && (
-                        <div className="text-xs text-gray-500 text-center">
-                          +{homeworkForDay.length - 3}
-                        </div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className={`text-sm font-medium ${
+                        isToday ? 'text-blue-600' : 
+                        !isCurrentMonth ? 'text-gray-400' : 'text-gray-900'
+                      }`}>
+                        {date.getDate()}
+                      </div>
+                      {homeworkForDay.length > 0 && (
+                        <span className="task-badge">
+                          {homeworkForDay.length}
+                        </span>
                       )}
                     </div>
+                    {/* Carousel of homework cards */}
+                    {homeworkForDay.length > 0 && (
+                      <div className="relative h-[60px]">
+                        {homeworkForDay.length > 1 && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                prevSlide(date.toISOString(), homeworkForDay.length);
+                              }}
+                              className="carousel-nav-button absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur rounded-full p-0.5 shadow-md hover:bg-white transition-all hover:scale-110"
+                            >
+                              <ChevronLeft className="w-3 h-3 text-gray-700" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                nextSlide(date.toISOString(), homeworkForDay.length);
+                              }}
+                              className="carousel-nav-button absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur rounded-full p-0.5 shadow-md hover:bg-white transition-all hover:scale-110"
+                            >
+                              <ChevronRight className="w-3 h-3 text-gray-700" />
+                            </button>
+                          </>
+                        )}
+                        
+                        <div className="overflow-hidden h-full">
+                          <div 
+                            className="flex transition-transform duration-300 h-full"
+                            style={{ 
+                              transform: `translateX(-${(carouselIndexes[date.toISOString()] || 0) * 100}%)`
+                            }}
+                          >
+                            {homeworkForDay.map(hw => {
+                              const priorityColors = {
+                                completed: 'bg-green-50 border-green-300',
+                                overdue: 'bg-red-50 border-red-300',
+                                high: 'bg-orange-50 border-orange-300',
+                                medium: 'bg-yellow-50 border-yellow-300',
+                                low: 'bg-blue-50 border-blue-300'
+                              };
+                              
+                              const cardColor = hw.status === 'completed' ? priorityColors.completed :
+                                              hw.status === 'overdue' ? priorityColors.overdue :
+                                              priorityColors[hw.priority] || priorityColors.low;
+                              
+                              return (
+                                <div
+                                  key={hw.id}
+                                  className="w-full flex-shrink-0 px-1"
+                                >
+                                  <div
+                                    className={`p-1.5 rounded-lg border ${cardColor} cursor-pointer hover:shadow-sm transition-all`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEdit(hw);
+                                    }}
+                                  >
+                                    <div className="flex items-start justify-between gap-1">
+                                      <div className="flex-1 min-w-0">
+                                        <p className={`text-xs font-semibold text-gray-900 truncate ${
+                                          hw.status === 'completed' ? 'line-through' : ''
+                                        }`}>
+                                          {hw.subject}
+                                        </p>
+                                        <p className={`text-xs text-gray-600 line-clamp-1 mt-0.5 ${
+                                          hw.status === 'completed' ? 'line-through opacity-60' : ''
+                                        }`}>
+                                          {hw.description}
+                                        </p>
+                                      </div>
+                                      {(hw.estimatedHours && hw.estimatedHours >= 2) && (
+                                        <span className="flex-shrink-0 text-xs font-medium text-gray-500">
+                                          {hw.estimatedHours}h
+                                        </span>
+                                      )}
+                                    </div>
+                                    {hw.status === 'overdue' && (
+                                      <div className="mt-0.5">
+                                        <span className="text-xs font-medium text-red-600">⚠ Scaduto</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        
+                        {/* Carousel indicators */}
+                        {homeworkForDay.length > 1 && (
+                          <div className="flex justify-center gap-0.5 mt-1">
+                            {homeworkForDay.map((_, idx) => (
+                              <div
+                                key={idx}
+                                className={`w-1 h-1 rounded-full transition-colors ${
+                                  (carouselIndexes[date.toISOString()] || 0) === idx
+                                    ? 'bg-blue-500'
+                                    : 'bg-gray-300'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -638,7 +833,209 @@ export default function HomeworkPage() {
 
         {/* Content */}
         {viewMode === 'calendar' ? (
-          <CalendarView />
+          <>
+            <CalendarView />
+            {/* Expanded Day Details Modal */}
+            {clickedDate && (
+              <>
+                {/* Overlay */}
+                <div 
+                  className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+                  onClick={closePopup}
+                  style={{
+                    animation: 'fadeIn 0.3s ease-out'
+                  }}
+                />
+                
+                {/* Modal Card */}
+                <div
+                  className="fixed z-50 bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-hidden"
+                  style={{
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    transformOrigin: clickedRect ? `${clickedRect.left + clickedRect.width/2}px ${clickedRect.top + clickedRect.height/2}px` : 'center',
+                    animation: 'expandFromDay 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                  }}
+                >
+                  {/* Date Header */}
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {clickedDate?.toLocaleDateString('it-IT', { 
+                          weekday: 'long', 
+                          day: 'numeric', 
+                          month: 'long' 
+                        })}
+                      </h2>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {clickedDate?.getFullYear()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {clickedDate?.toDateString() === new Date().toDateString() && (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
+                          Oggi
+                        </span>
+                      )}
+                      <button
+                        onClick={closePopup}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <X className="w-5 h-5 text-gray-500" />
+                      </button>
+                    </div>
+                  </div>
+                    
+                  {/* Content List */}
+                  {(() => {
+                    const homeworkForDay = homework.filter(hw => {
+                      const hwDate = new Date(hw.dueDate);
+                      return hwDate.toDateString() === clickedDate?.toDateString();
+                    });
+                    
+                    const examsForDay = getExams().filter(exam => {
+                      const examDate = new Date(exam.date);
+                      return examDate.toDateString() === clickedDate?.toDateString();
+                    });
+                    
+                    return (
+                      <div className="space-y-3 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 140px)' }}>
+                        {/* Exams */}
+                        {examsForDay.length > 0 && (
+                          <div className="space-y-2">
+                            <h3 className="text-sm font-semibold text-red-600 flex items-center gap-2">
+                              <AlertTriangle className="w-4 h-4" />
+                              Verifiche ({examsForDay.length})
+                            </h3>
+                            {examsForDay.map(exam => (
+                              <div key={exam.id} className="p-3 bg-red-50 rounded-lg border-l-4 border-red-400">
+                                <p className="font-medium text-gray-900">{exam.subject}</p>
+                                <p className="text-sm text-gray-600 mt-1">
+                                  {exam.type === 'written' ? 'Scritto' : 'Orale'} • {exam.topics.length} argomenti
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                          
+                        {/* Homework */}
+                        {homeworkForDay.length > 0 ? (
+                          <>
+                            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                              <BookOpen className="w-4 h-4" />
+                              Compiti ({homeworkForDay.length})
+                            </h3>
+                            {homeworkForDay.map(hw => (
+                              <div 
+                                key={hw.id} 
+                                className={`p-3 rounded-lg border-l-4 ${
+                                  hw.status === 'completed' 
+                                    ? 'bg-green-50 border-green-400' 
+                                    : hw.status === 'overdue'
+                                    ? 'bg-red-50 border-red-400'
+                                    : hw.priority === 'high'
+                                    ? 'bg-orange-50 border-orange-400'
+                                    : 'bg-blue-50 border-blue-400'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <p className={`font-medium text-gray-900 ${
+                                        hw.status === 'completed' ? 'line-through' : ''
+                                      }`}>
+                                        {hw.subject}
+                                      </p>
+                                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        hw.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                        hw.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                        'bg-green-100 text-green-700'
+                                      }`}>
+                                        {hw.priority === 'high' ? 'Alta' : hw.priority === 'medium' ? 'Media' : 'Bassa'}
+                                      </span>
+                                    </div>
+                                    <p className={`text-sm text-gray-600 mt-1 ${
+                                      hw.status === 'completed' ? 'line-through' : ''
+                                    }`}>
+                                      {hw.description}
+                                    </p>
+                                    <div className="flex items-center gap-4 mt-2">
+                                      {hw.estimatedHours && (
+                                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                                          <Timer className="w-3 h-3" />
+                                          {hw.estimatedHours}h
+                                        </span>
+                                      )}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEdit(hw);
+                                          closePopup();
+                                        }}
+                                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                                      >
+                                        Modifica
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleComplete(hw);
+                                    }}
+                                    className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                                  >
+                                    {hw.status === 'completed' ? (
+                                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                    ) : (
+                                      <Square className="w-5 h-5 text-gray-400 hover:text-blue-600" />
+                                    )}
+                                  </button>
+                                </div>
+                                </div>
+                              ))}
+                            </>
+                          ) : examsForDay.length === 0 ? (
+                            <div className="text-center py-12">
+                              <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                              <p className="text-gray-500 mb-4">Nessun compito per questo giorno</p>
+                              <button
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                                onClick={() => {
+                                  setFormData({
+                                    ...formData,
+                                    dueDate: clickedDate?.toISOString().split('T')[0] || ''
+                                  });
+                                  setShowAddModal(true);
+                                  closePopup();
+                                }}
+                              >
+                                + Aggiungi compito
+                              </button>
+                            </div>
+                          ) : null}
+                        
+                        {/* Summary Stats */}
+                        {(homeworkForDay.length > 0 || examsForDay.length > 0) && (
+                          <div className="pt-3 mt-3 border-t border-gray-200 flex items-center justify-between text-sm">
+                            <span className="text-gray-600">
+                              Totale: {homeworkForDay.length + examsForDay.length} elementi
+                            </span>
+                            {homeworkForDay.some(hw => hw.estimatedHours) && (
+                              <span className="text-gray-700 font-medium">
+                                {homeworkForDay.reduce((acc, hw) => acc + (hw.estimatedHours || 0), 0)}h di studio stimato
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
+          </>
         ) : (
           <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
             {filteredHomework.length === 0 ? (

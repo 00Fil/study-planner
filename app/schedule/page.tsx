@@ -2,62 +2,307 @@
 
 import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { Clock, MapPin, BookOpen } from 'lucide-react';
+import { 
+  Clock, 
+  MapPin, 
+  BookOpen, 
+  Calculator,
+  Globe,
+  Monitor,
+  Network,
+  Cpu,
+  Activity,
+  Book,
+  FolderOpen,
+  Church,
+  Calendar,
+  ChevronRight,
+  User,
+  Building
+} from 'lucide-react';
 
 interface Lesson {
   subject: string;
   room: string;
   startTime: string;
   endTime: string;
+  duration?: number; // in hours
   color: string;
+  bgColor: string;
+  icon?: any;
 }
 
 interface DaySchedule {
   [key: string]: Lesson | null;
 }
 
+// Mappa icone per materie
+const subjectIcons: { [key: string]: any } = {
+  'MATEMATICA': Calculator,
+  'ITALIANO E STORIA': Book,
+  'SISTEMI E RETI': Network,
+  'LINGUA INGLESE': Globe,
+  'INFORMATICA': Monitor,
+  'TECNOLOGIE E PROGETTAZIONE DI SISTEMI INFORMATICI E DI TELECOMUNICAZIONI': Cpu,
+  'GESTIONE PROGETTO, ORGANIZZAZIONE D\'IMPRESA': FolderOpen,
+  'SCIENZE MOTORIE E SPORTIVE': Activity,
+  'RELIGIONE CATTOLICA/ATTIVITA\' ALTERNATIVA': Church
+};
+
 const schedule: { [key: string]: DaySchedule } = {
   LUN: {
-    '7:50': { subject: 'MATEMATICA', room: 'PP07-stem', startTime: '7:50', endTime: '8:50', color: 'bg-green-200' },
-    '8:50': { subject: 'ITALIANO E STORIA', room: 'PP07-stem', startTime: '8:50', endTime: '9:50', color: 'bg-yellow-200' },
-    '9:50': { subject: 'SISTEMI E RETI', room: 'PS16-ADA1', startTime: '9:50', endTime: '10:50', color: 'bg-purple-200' },
-    '10:50': { subject: 'LINGUA INGLESE', room: 'PS11', startTime: '10:50', endTime: '11:50', color: 'bg-blue-200' },
-    '11:50': { subject: 'INFORMATICA', room: 'LAB INF 3', startTime: '11:50', endTime: '12:50', color: 'bg-orange-200' }
+    '7:50': { 
+      subject: 'MATEMATICA', 
+      room: 'Aula PP07-stem', 
+      startTime: '7:50', 
+      endTime: '8:50', 
+      color: 'text-emerald-700',
+      bgColor: 'bg-emerald-50 border border-emerald-300',
+      icon: Calculator
+    },
+    '8:50': { 
+      subject: 'ITALIANO E STORIA', 
+      room: 'Aula PP07-stem', 
+      startTime: '8:50', 
+      endTime: '9:50', 
+      color: 'text-amber-700',
+      bgColor: 'bg-amber-50 border border-amber-300',
+      icon: Book
+    },
+    '9:50': { 
+      subject: 'SISTEMI E RETI', 
+      room: 'Aula PS16 - ADA1', 
+      startTime: '9:50', 
+      endTime: '10:50', 
+      color: 'text-violet-700',
+      bgColor: 'bg-violet-50 border border-violet-300',
+      icon: Network
+    },
+    '10:50': { 
+      subject: 'LINGUA INGLESE', 
+      room: 'Aula PS11', 
+      startTime: '10:50', 
+      endTime: '11:50', 
+      color: 'text-blue-700',
+      bgColor: 'bg-blue-50 border border-blue-300',
+      icon: Globe
+    },
+    '11:50': { 
+      subject: 'INFORMATICA', 
+      room: 'LAB. INFORMATICA 3', 
+      startTime: '11:50', 
+      endTime: '12:50', 
+      color: 'text-orange-700',
+      bgColor: 'bg-orange-50 border border-orange-300',
+      icon: Monitor
+    }
   },
   MAR: {
-    '7:50': { subject: 'INFORMATICA', room: 'PS16-ADA1', startTime: '7:50', endTime: '8:50', color: 'bg-orange-200' },
-    '8:50': { subject: 'RELIGIONE', room: 'PP20-STEM', startTime: '8:50', endTime: '9:50', color: 'bg-gray-200' },
-    '9:50': { subject: 'TPSIT', room: 'LAB INF 3', startTime: '9:50', endTime: '10:50', color: 'bg-pink-200' },
-    '10:50': { subject: 'ITALIANO E STORIA', room: 'PS05', startTime: '10:50', endTime: '11:50', color: 'bg-yellow-200' },
-    '11:50': { subject: 'SCIENZE MOTORIE', room: 'PALESTRA', startTime: '11:50', endTime: '12:50', color: 'bg-cyan-200' }
+    '7:50': { 
+      subject: 'INFORMATICA', 
+      room: 'Aula PS16 - ADA1', 
+      startTime: '7:50', 
+      endTime: '8:50', 
+      color: 'text-orange-700',
+      bgColor: 'bg-orange-50 border border-orange-300',
+      icon: Monitor
+    },
+    '8:50': { 
+      subject: 'RELIGIONE CATTOLICA/ATTIVITA\' ALTERNATIVA', 
+      room: 'Aula PP20-STEM / RELIGIONE-03', 
+      startTime: '8:50', 
+      endTime: '9:50', 
+      color: 'text-gray-700',
+      bgColor: 'bg-gray-50 border border-gray-300',
+      icon: Church
+    },
+    '9:50': { 
+      subject: 'TECNOLOGIE E PROGETTAZIONE DI SISTEMI INFORMATICI E DI TELECOMUNICAZIONI', 
+      room: 'LAB. INFORMATICA 3', 
+      startTime: '9:50', 
+      endTime: '11:50', 
+      duration: 2,
+      color: 'text-pink-700',
+      bgColor: 'bg-pink-50 border border-pink-300',
+      icon: Cpu
+    },
+    '10:50': null, // Occupato da TPSIT 2 ore
+    '11:50': { 
+      subject: 'SCIENZE MOTORIE E SPORTIVE', 
+      room: 'PALESTRA ORATORIO', 
+      startTime: '11:50', 
+      endTime: '12:50', 
+      color: 'text-cyan-700',
+      bgColor: 'bg-cyan-50 border border-cyan-300',
+      icon: Activity
+    }
   },
   MER: {
-    '7:50': { subject: 'MATEMATICA', room: 'PP20-STEM', startTime: '7:50', endTime: '8:50', color: 'bg-green-200' },
-    '8:50': { subject: 'SISTEMI E RETI', room: 'LAB INF 2', startTime: '8:50', endTime: '9:50', color: 'bg-purple-200' },
-    '9:50': { subject: 'ITALIANO E STORIA', room: 'PS15', startTime: '9:50', endTime: '10:50', color: 'bg-yellow-200' },
-    '10:50': null,
-    '11:50': { subject: 'INFORMATICA', room: 'LAB INF 3', startTime: '11:50', endTime: '12:50', color: 'bg-orange-200' }
+    '7:50': { 
+      subject: 'MATEMATICA', 
+      room: 'Aula PP20-STEM', 
+      startTime: '7:50', 
+      endTime: '8:50', 
+      color: 'text-emerald-700',
+      bgColor: 'bg-emerald-50 border border-emerald-300',
+      icon: Calculator
+    },
+    '8:50': { 
+      subject: 'SISTEMI E RETI', 
+      room: 'LAB. INFORMATICA 2', 
+      startTime: '8:50', 
+      endTime: '9:50', 
+      color: 'text-violet-700',
+      bgColor: 'bg-violet-50 border border-violet-300',
+      icon: Network
+    },
+    '9:50': { 
+      subject: 'ITALIANO E STORIA', 
+      room: 'Aula PS15', 
+      startTime: '9:50', 
+      endTime: '10:50', 
+      color: 'text-amber-700',
+      bgColor: 'bg-amber-50 border border-amber-300',
+      icon: Book
+    },
+    '10:50': { 
+      subject: 'INFORMATICA', 
+      room: 'LAB. INFORMATICA 3', 
+      startTime: '10:50', 
+      endTime: '12:50', 
+      duration: 2,
+      color: 'text-orange-700',
+      bgColor: 'bg-orange-50 border border-orange-300',
+      icon: Monitor
+    },
+    '11:50': null // Occupato da Informatica 2 ore
   },
   GIO: {
-    '7:50': null,
-    '8:50': { subject: 'SISTEMI E RETI', room: 'LAB INF 2', startTime: '8:50', endTime: '10:50', color: 'bg-purple-200' },
-    '9:50': null,
-    '10:50': { subject: 'LINGUA INGLESE', room: 'PS10', startTime: '10:50', endTime: '11:50', color: 'bg-blue-200' },
-    '11:50': { subject: 'TPSIT', room: 'LAB INF 3', startTime: '11:50', endTime: '12:50', color: 'bg-pink-200' }
+    '7:50': { 
+      subject: 'SISTEMI E RETI', 
+      room: 'LAB. INFORMATICA 2', 
+      startTime: '7:50', 
+      endTime: '9:50', 
+      duration: 2,
+      color: 'text-violet-700',
+      bgColor: 'bg-violet-50 border border-violet-300',
+      icon: Network
+    },
+    '8:50': null, // Occupato da Sistemi e Reti 2 ore
+    '9:50': { 
+      subject: 'GESTIONE PROGETTO, ORGANIZZAZIONE D\'IMPRESA', 
+      room: 'Aula PS22', 
+      startTime: '9:50', 
+      endTime: '10:50', 
+      color: 'text-red-700',
+      bgColor: 'bg-red-50 border border-red-300',
+      icon: FolderOpen
+    },
+    '10:50': { 
+      subject: 'LINGUA INGLESE', 
+      room: 'Aula PS10', 
+      startTime: '10:50', 
+      endTime: '11:50', 
+      color: 'text-blue-700',
+      bgColor: 'bg-blue-50 border border-blue-300',
+      icon: Globe
+    },
+    '11:50': { 
+      subject: 'TECNOLOGIE E PROGETTAZIONE DI SISTEMI INFORMATICI E DI TELECOMUNICAZIONI', 
+      room: 'LAB. INFORMATICA 3', 
+      startTime: '11:50', 
+      endTime: '12:50', 
+      color: 'text-pink-700',
+      bgColor: 'bg-pink-50 border border-pink-300',
+      icon: Cpu
+    }
   },
   VEN: {
-    '7:50': { subject: 'LINGUA INGLESE', room: 'PS02', startTime: '7:50', endTime: '8:50', color: 'bg-blue-200' },
-    '8:50': { subject: 'ITALIANO E STORIA', room: 'PS23', startTime: '8:50', endTime: '9:50', color: 'bg-yellow-200' },
-    '9:50': { subject: 'TPSIT', room: 'PS23', startTime: '9:50', endTime: '10:50', color: 'bg-pink-200' },
-    '10:50': { subject: 'GESTIONE PROGETTO', room: 'PS23', startTime: '10:50', endTime: '11:50', color: 'bg-red-200' },
-    '11:50': { subject: 'INFORMATICA', room: 'PS16-ADA1', startTime: '11:50', endTime: '12:50', color: 'bg-orange-200' }
+    '7:50': { 
+      subject: 'LINGUA INGLESE', 
+      room: 'Aula PS02', 
+      startTime: '7:50', 
+      endTime: '8:50', 
+      color: 'text-blue-700',
+      bgColor: 'bg-blue-50 border border-blue-300',
+      icon: Globe
+    },
+    '8:50': { 
+      subject: 'ITALIANO E STORIA', 
+      room: 'Aula PS23', 
+      startTime: '8:50', 
+      endTime: '9:50', 
+      color: 'text-amber-700',
+      bgColor: 'bg-amber-50 border border-amber-300',
+      icon: Book
+    },
+    '9:50': { 
+      subject: 'TECNOLOGIE E PROGETTAZIONE DI SISTEMI INFORMATICI E DI TELECOMUNICAZIONI', 
+      room: 'Aula PS23', 
+      startTime: '9:50', 
+      endTime: '10:50', 
+      color: 'text-pink-700',
+      bgColor: 'bg-pink-50 border border-pink-300',
+      icon: Cpu
+    },
+    '10:50': { 
+      subject: 'GESTIONE PROGETTO, ORGANIZZAZIONE D\'IMPRESA', 
+      room: 'Aula PS23', 
+      startTime: '10:50', 
+      endTime: '11:50', 
+      color: 'text-red-700',
+      bgColor: 'bg-red-50 border border-red-300',
+      icon: FolderOpen
+    },
+    '11:50': { 
+      subject: 'INFORMATICA', 
+      room: 'Aula PS16 - ADA1', 
+      startTime: '11:50', 
+      endTime: '12:50', 
+      color: 'text-orange-700',
+      bgColor: 'bg-orange-50 border border-orange-300',
+      icon: Monitor
+    }
   },
   SAB: {
-    '7:50': null,
-    '8:50': { subject: 'ITALIANO E STORIA', room: 'PS10', startTime: '8:50', endTime: '9:50', color: 'bg-yellow-200' },
-    '9:50': { subject: 'MATEMATICA', room: 'PS07-stem', startTime: '9:50', endTime: '10:50', color: 'bg-green-200' },
-    '10:50': { subject: 'GESTIONE PROGETTO', room: 'PS12-ADA2', startTime: '10:50', endTime: '11:50', color: 'bg-red-200' },
-    '11:50': { subject: 'INFORMATICA', room: 'LAB INF 3', startTime: '11:50', endTime: '12:50', color: 'bg-orange-200' }
+    '7:50': { 
+      subject: 'ITALIANO E STORIA', 
+      room: 'Aula PS10', 
+      startTime: '7:50', 
+      endTime: '9:50', 
+      duration: 2,
+      color: 'text-amber-700',
+      bgColor: 'bg-amber-50 border border-amber-300',
+      icon: Book
+    },
+    '8:50': null, // Occupato da Italiano e Storia 2 ore
+    '9:50': { 
+      subject: 'MATEMATICA', 
+      room: 'Aula PS07-stem', 
+      startTime: '9:50', 
+      endTime: '10:50', 
+      color: 'text-emerald-700',
+      bgColor: 'bg-emerald-50 border border-emerald-300',
+      icon: Calculator
+    },
+    '10:50': { 
+      subject: 'GESTIONE PROGETTO, ORGANIZZAZIONE D\'IMPRESA', 
+      room: 'Aula PS12-ADA2', 
+      startTime: '10:50', 
+      endTime: '11:50', 
+      color: 'text-red-700',
+      bgColor: 'bg-red-50 border border-red-300',
+      icon: FolderOpen
+    },
+    '11:50': { 
+      subject: 'INFORMATICA', 
+      room: 'LAB. INFORMATICA 3', 
+      startTime: '11:50', 
+      endTime: '12:50', 
+      color: 'text-orange-700',
+      bgColor: 'bg-orange-50 border border-orange-300',
+      icon: Monitor
+    }
   }
 };
 
@@ -144,168 +389,212 @@ export default function SchedulePage() {
     return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Funzione per ottenere il nome abbreviato della materia
+  const getShortSubjectName = (subject: string) => {
+    const shortNames: { [key: string]: string } = {
+      'TECNOLOGIE E PROGETTAZIONE DI SISTEMI INFORMATICI E DI TELECOMUNICAZIONI': 'T.P.S.I.T.',
+      'GESTIONE PROGETTO, ORGANIZZAZIONE D\'IMPRESA': 'GESTIONE PROGETTO',
+      'RELIGIONE CATTOLICA/ATTIVITA\' ALTERNATIVA': 'RELIGIONE',
+      'SCIENZE MOTORIE E SPORTIVE': 'SCIENZE MOTORIE'
+    };
+    return shortNames[subject] || subject;
+  };
+
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Orario Scolastico</h1>
-          <p className="text-gray-600">Classe 5ª I - {daysFull[currentTime.getDay() - 1] || 'Weekend'}</p>
+        <div className="mb-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl">
+          <div className="flex items-center gap-4">
+            <Calendar className="w-8 h-8" />
+            <div>
+              <h1 className="text-3xl font-bold mb-1">Orario Scolastico</h1>
+              <p className="text-indigo-100">Classe 5ª I • {daysFull[currentTime.getDay() - 1] || 'Weekend'}</p>
+            </div>
+          </div>
         </div>
 
         {/* Current Status */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Current Lesson */}
-          <div className={`rounded-xl shadow-sm p-6 ${currentLesson ? 'bg-green-50 border-2 border-green-300' : 'bg-white'}`}>
+          <div className={`rounded-2xl shadow-lg p-6 transition-all duration-300 ${
+            currentLesson 
+              ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-400 shadow-green-200' 
+              : 'bg-white border-2 border-gray-100'
+          }`}>
             <div className="flex items-center gap-3 mb-4">
-              <Clock className="w-5 h-5 text-green-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Ora Attuale - {formatTime(currentTime)}</h2>
+              <div className={`p-2 rounded-full ${currentLesson ? 'bg-green-100' : 'bg-gray-100'}`}>
+                <Clock className={`w-5 h-5 ${currentLesson ? 'text-green-600' : 'text-gray-600'}`} />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Lezione Attuale</h2>
+                <p className="text-sm text-gray-500">{formatTime(currentTime)}</p>
+              </div>
             </div>
             {currentLesson ? (
-              <div>
-                <p className="text-xl font-bold text-gray-900 mb-2">{currentLesson.subject}</p>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <MapPin className="w-4 h-4" />
-                  <span>{currentLesson.room}</span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  {currentLesson.icon && <currentLesson.icon className={`w-6 h-6 ${currentLesson.color}`} />}
+                  <p className="text-xl font-bold text-gray-900">{getShortSubjectName(currentLesson.subject)}</p>
                 </div>
-                <p className="text-sm text-gray-500 mt-2">
-                  {currentLesson.startTime} - {currentLesson.endTime}
-                </p>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Building className="w-4 h-4 text-gray-400" />
+                  <span className="font-medium">{currentLesson.room}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-500">
+                    {currentLesson.startTime} - {currentLesson.endTime}
+                  </span>
+                </div>
               </div>
             ) : (
-              <p className="text-gray-500">Nessuna lezione in corso</p>
+              <p className="text-gray-500 italic">Nessuna lezione in corso</p>
             )}
           </div>
 
           {/* Next Lesson */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-6">
             <div className="flex items-center gap-3 mb-4">
-              <Clock className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Prossima Lezione</h2>
+              <div className="p-2 rounded-full bg-blue-100">
+                <Clock className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Prossima Lezione</h2>
+                <p className="text-sm text-gray-500">In arrivo</p>
+              </div>
             </div>
             {nextLesson ? (
-              <div>
-                <p className="text-xl font-bold text-gray-900 mb-2">{nextLesson.subject}</p>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <MapPin className="w-4 h-4" />
-                  <span>{nextLesson.room}</span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  {nextLesson.icon && <nextLesson.icon className={`w-6 h-6 ${nextLesson.color}`} />}
+                  <p className="text-xl font-bold text-gray-900">{getShortSubjectName(nextLesson.subject)}</p>
                 </div>
-                <p className="text-sm text-gray-500 mt-2">
-                  {nextLesson.startTime} - {nextLesson.endTime}
-                </p>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Building className="w-4 h-4 text-gray-400" />
+                  <span className="font-medium">{nextLesson.room}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-500">
+                    {nextLesson.startTime} - {nextLesson.endTime}
+                  </span>
+                </div>
               </div>
             ) : (
-              <p className="text-gray-500">Nessuna lezione programmata</p>
+              <p className="text-gray-500 italic">Nessuna lezione programmata</p>
             )}
           </div>
         </div>
 
         {/* Weekly Schedule Table */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Orario Settimanale</h2>
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
+          <div className="px-6 py-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+            <div className="flex items-center gap-3">
+              <Calendar className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Orario Settimanale</h2>
+            </div>
           </div>
           
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ora
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 px-3 py-3 text-center text-sm font-bold text-gray-700 w-24">
+                    ORA
                   </th>
                   {days.map((day, index) => (
-                    <th key={day} className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
-                      {daysFull[index]}
+                    <th key={day} className="border border-gray-300 px-3 py-3 text-center text-sm font-bold text-gray-700 w-1/6">
+                      {day}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {timeSlots.map((time, timeIndex) => (
-                  <tr key={time}>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
-                      {time} - {parseInt(time.split(':')[0]) + 1}:{time.split(':')[1]}
-                    </td>
-                    {days.map(day => {
-                      const lesson = schedule[day][time];
-                      const isCurrent = isCurrentSlot(day, time);
-                      
-                      // Check if this is a continuation of the previous lesson
-                      if (day === 'GIO' && time === '9:50') {
-                        return <td key={`${day}-${time}`} className="px-4 py-3"></td>;
-                      }
-                      
-                      return (
-                        <td key={`${day}-${time}`} className="px-4 py-3">
-                          {lesson ? (
-                            <div className={`p-3 rounded-lg border-2 ${lesson.color} ${
-                              isCurrent ? 'ring-2 ring-green-500 ring-offset-2' : ''
-                            } ${day === 'GIO' && time === '8:50' ? 'row-span-2' : ''}`}>
-                              <p className="text-xs font-semibold text-gray-900 mb-1">
-                                {lesson.subject}
-                              </p>
-                              <p className="text-xs text-gray-600">
-                                📍 {lesson.room}
-                              </p>
-                              {isCurrent && (
-                                <span className="inline-block mt-2 px-2 py-1 bg-green-500 text-white text-xs rounded-full">
-                                  IN CORSO
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="p-3 text-center text-gray-400">
-                              -
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+              <tbody>
+                {timeSlots.map((time, timeIndex) => {
+                  const nextTime = `${parseInt(time.split(':')[0]) + 1}:${time.split(':')[1]}`;
+                  
+                  return (
+                    <tr key={time} className="h-20">
+                      <td className="border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 text-center bg-gray-50">
+                        <div className="text-sm font-medium">
+                          {time}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {nextTime}
+                        </div>
+                      </td>
+                      {days.map(day => {
+                        const lesson = schedule[day][time];
+                        const isCurrent = isCurrentSlot(day, time);
+                        
+                        // Skip rendering for cells occupied by 2-hour lessons
+                        if ((day === 'MAR' && time === '10:50' && schedule[day]['9:50']?.duration === 2) ||
+                            (day === 'MER' && time === '11:50' && schedule[day]['10:50']?.duration === 2) ||
+                            (day === 'GIO' && time === '8:50' && schedule[day]['7:50']?.duration === 2) ||
+                            (day === 'SAB' && time === '8:50' && schedule[day]['7:50']?.duration === 2)) {
+                          return null;
+                        }
+                        
+                        const rowSpan = lesson?.duration || 1;
+                        
+                        return (
+                          <td 
+                            key={`${day}-${time}`} 
+                            className={`border border-gray-300 p-0 relative ${
+                              lesson ? lesson.bgColor : 'bg-gray-50'
+                            } ${isCurrent ? 'ring-2 ring-green-500 ring-inset' : ''}`}
+                            rowSpan={rowSpan}
+                          >
+                            {lesson ? (
+                              <div className="h-full w-full flex flex-col justify-center px-3 py-2.5 relative">
+                                {/* Subject Name with Icon */}
+                                <div className="flex items-center gap-2">
+                                  {lesson.icon && (
+                                    <lesson.icon className={`w-4 h-4 ${lesson.color} flex-shrink-0`} />
+                                  )}
+                                  <p className={`text-sm font-bold ${lesson.color} uppercase`}>
+                                    {getShortSubjectName(lesson.subject)}
+                                  </p>
+                                </div>
+                                
+                                {/* Room */}
+                                <div className="text-xs text-gray-600 mt-1 ml-6">
+                                  {lesson.room}
+                                </div>
+                                
+                                {/* Duration for 2-hour lessons */}
+                                {lesson.duration === 2 && (
+                                  <div className="text-xs text-gray-500 mt-2 ml-6">
+                                    {lesson.startTime} - {lesson.endTime}
+                                  </div>
+                                )}
+                                
+                                {/* Current Lesson Indicator */}
+                                {isCurrent && (
+                                  <div className="absolute top-1 right-1">
+                                    <span className="px-1.5 py-0.5 bg-green-500 text-white text-xs font-bold rounded">
+                                      •
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="h-full flex items-center justify-center">
+                                <span className="text-gray-300">—</span>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mt-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Legenda Materie</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-100 border-2 border-green-300 rounded"></div>
-              <span className="text-sm">Matematica</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-yellow-100 border-2 border-yellow-300 rounded"></div>
-              <span className="text-sm">Italiano e Storia</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-purple-100 border-2 border-purple-300 rounded"></div>
-              <span className="text-sm">Sistemi e Reti</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-100 border-2 border-blue-300 rounded"></div>
-              <span className="text-sm">Inglese</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-orange-100 border-2 border-orange-300 rounded"></div>
-              <span className="text-sm">Informatica</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-pink-100 border-2 border-pink-300 rounded"></div>
-              <span className="text-sm">TPSIT</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-100 border-2 border-red-300 rounded"></div>
-              <span className="text-sm">Gestione Progetto</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-cyan-100 border-2 border-cyan-300 rounded"></div>
-              <span className="text-sm">Scienze Motorie</span>
-            </div>
-          </div>
-        </div>
       </div>
     </AppLayout>
   );

@@ -32,11 +32,11 @@ export interface Exam {
   id: string;
   date: string;
   subject: string;
-  type: 'written' | 'oral';
+  type: string;
   topics: string[];  // Topic IDs that will be in the exam
-  priority: 'high' | 'medium' | 'low';
-  status: 'pending' | 'completed';
-  grade?: string;  // Changed to string to support half grades and + notation
+  difficulty?: number;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  grade?: number;
   notes?: string;
 }
 
@@ -52,9 +52,14 @@ export interface StudyStats {
 export interface PomodoroSession {
   id: string;
   subject: string;
+  topic?: string;
+  date: string;
   startTime: string;
+  endTime: string;
   duration: number;
+  type: 'focus' | 'break';
   completed: boolean;
+  notes?: string;
 }
 
 export interface Subject {
@@ -73,28 +78,43 @@ export interface Subject {
 export interface Topic {
   id: string;
   subjectName: string;  // Reference to the subject
-  title: string;
+  name: string;
   description?: string;
-  dateAdded: string;  // When the topic was taught/added
-  dateStudied?: string;  // Last time it was studied
-  completed: boolean;
-  difficulty: 'easy' | 'medium' | 'hard';
-  importance: 'low' | 'medium' | 'high';
-  notes?: string;
+  status: 'not_started' | 'in_progress' | 'completed';
+  priority: 'low' | 'medium' | 'high';
+  difficulty: number;
+  estimatedHours: number;
+  actualHours: number;
   markedForExam?: boolean;  // If this topic is selected for upcoming exam
   examIds?: string[];  // Which exams include this topic
+  notes?: string;
+  resources?: string[];
+  completedDate?: string;
+  
+  // Legacy fields for compatibility
+  title?: string;
+  dateAdded?: string;
+  dateStudied?: string;
+  completed?: boolean;
+  importance?: 'low' | 'medium' | 'high';
 }
 
 export interface Homework {
   id: string;
   subject: string;
-  description: string;
+  title: string;
+  description?: string;
   dueDate: string;
-  assignedDate: string;
-  topics?: string[];
-  priority: 'high' | 'medium' | 'low';
-  status: 'pending' | 'completed' | 'overdue';
-  estimatedHours?: number;
+  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'in_progress' | 'completed';
+  estimatedHours: number;
+  actualHours: number;
+  attachments?: string[];
   notes?: string;
   completedDate?: string;
+  
+  // Legacy fields for compatibility
+  due_date?: string;
+  assignedDate?: string;
+  topics?: string[];
 }

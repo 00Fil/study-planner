@@ -24,7 +24,8 @@ import {
   ChevronUp,
   School,
   Target,
-  BarChart3
+  BarChart3,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
@@ -36,7 +37,7 @@ import {
   deleteTopic,
   getExams,
   getPomodoroSessions 
-} from '@/lib/storage';
+} from '@/lib/supabase-storage';
 import { getTodayLessons } from '@/lib/schedule-helpers';
 import { Subject, Topic, Exam } from '@/lib/types';
 
@@ -64,6 +65,8 @@ export default function SubjectsPage() {
     professor: '',
     color: '#3B82F6'
   });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -75,125 +78,189 @@ export default function SubjectsPage() {
     }
   }, [selectedSubject]);
 
-  const loadData = () => {
-    const loadedSubjects = getSubjects();
-    setSubjects(loadedSubjects);
-    
-    const exams = getExams().filter(e => e.status === 'pending');
-    setUpcomingExams(exams);
-    
-    calculateStats(loadedSubjects);
-  };
-
-  const loadTopics = (subjectName: string) => {
-    const subjectTopics = getTopicsBySubject(subjectName);
-    setTopics(subjectTopics);
-  };
-
-  const calculateStats = (subjectList: Subject[]) => {
-    const sessions = getPomodoroSessions();
-    const exams = getExams();
-    const allTopics = topics;
-    const stats: Record<string, any> = {};
-
-    subjectList.forEach(subject => {
-      const subjectTopics = getTopicsBySubject(subject.name);
-      const subjectSessions = sessions.filter(s => s.subject === subject.name && s.completed);
-      const totalMinutes = subjectSessions.reduce((acc, s) => acc + s.duration, 0);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [loadedSubjects, exams] = await Promise.all([
+        getSubjects(),
+        getExams()
+      ]);
       
-      const subjectExams = exams.filter(e => e.subject === subject.name && e.status === 'completed' && e.grade);
-      const avgGrade = subjectExams.length > 0 
-        ? subjectExams.reduce((acc, e) => {
-            const gradeNum = parseFloat((e.grade || '0').replace(',', '.').replace(/[+\-]/g, ''));
-            return acc + (isNaN(gradeNum) ? 0 : gradeNum);
-          }, 0) / subjectExams.length
-        : 0;
-
-      const completedTopics = subjectTopics.filter(t => t.completed).length;
-      const totalTopics = subjectTopics.length;
-      const markedForExam = subjectTopics.filter(t => t.markedForExam).length;
-
-      stats[subject.name] = {
-        totalHours: Math.round((totalMinutes / 60) * 10) / 10,
-        averageGrade: Math.round(avgGrade * 10) / 10,
-        totalTopics,
-        completedTopics,
-        markedForExam,
-        completionRate: totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0,
-        upcomingExams: exams.filter(e => e.subject === subject.name && e.status === 'pending').length
-      };
-    });
-
-    setSubjectStats(stats);
+      setSubjects(loadedSubjects);
+      setUpcomingExams(exams.filter(e => e.status === 'scheduled'));
+      
+      await calculateStats(loadedSubjects);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Errore nel caricamento dei dati');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddTopic = () => {
+  const loadTopics = async (subjectName: string) => {
+    try {
+      const subjectTopics = await getTopicsBySubject(subjectName);
+      setTopics(subjectTopics);
+    } catch (error) {
+      console.error('Error loading topics:', error);
+      toast.error('Errore nel caricamento degli argomenti');
+    }
+  };
+
+  const calculateStats = async (subjectList: Subject[]) => {
+    try {
+      const [sessions, exams] = await Promise.all([
+        getPomodoroSessions(),
+        getExams()
+      ]);
+      
+      const stats: Record<string, any> = {};
+
+      for (const subject of subjectList) {
+        const subjectTopics = await getTopicsBySubject(subject.name);
+        const subjectSessions = sessions.filter(s => s.subject === subject.name && s.completed);
+        const totalMinutes = subjectSessions.reduce((acc, s) => acc + s.duration, 0);
+        
+        const subjectExams = exams.filter(e => e.subject === subject.name && e.status === 'completed' && e.grade);
+        const avgGrade = subjectExams.length > 0 
+          ? subjectExams.reduce((acc, e) => {
+              const gradeNum = parseFloat((e.grade || '0').toString().replace(',', '.').replace(/[+\-]/g, ''));
+              return acc + (isNaN(gradeNum) ? 0 : gradeNum);
+            }, 0) / subjectExams.length
+          : 0;
+
+        const completedTopics = subjectTopics.filter(t => t.status === 'completed').length;
+        const totalTopics = subjectTopics.length;
+        const markedForExam = subjectTopics.filter(t => t.marked_for_exam).length;
+
+        stats[subject.name] = {
+          totalHours: Math.round((totalMinutes / 60) * 10) / 10,
+          averageGrade: Math.round(avgGrade * 10) / 10,
+          totalTopics,
+          completedTopics,
+          markedForExam,
+          completionRate: totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0,
+          upcomingExams: exams.filter(e => e.subject === subject.name && e.status === 'scheduled').length
+        };
+      }
+
+      setSubjectStats(stats);
+    } catch (error) {
+      console.error('Error calculating stats:', error);
+    }
+  };
+
+  const handleAddTopic = async () => {
     if (!selectedSubject || !newTopic.title) {
       toast.error('Inserisci almeno il titolo dell\'argomento');
       return;
     }
 
-    const topic: Topic = {
-      id: Date.now().toString(),
-      subjectName: selectedSubject,
-      title: newTopic.title,
-      description: newTopic.description,
-      dateAdded: new Date().toISOString(),
-      completed: false,
-      difficulty: newTopic.difficulty || 'medium',
-      importance: newTopic.importance || 'medium',
-      notes: newTopic.notes,
-      markedForExam: false
-    };
+    setSaving(true);
+    try {
+      const topic: Topic = {
+        id: Date.now().toString(),
+        subjectName: selectedSubject,
+        name: newTopic.title!,
+        description: newTopic.description,
+        status: 'not_started',
+        priority: newTopic.difficulty || 'medium',
+        difficulty: newTopic.difficulty === 'low' ? 2 : newTopic.difficulty === 'medium' ? 3 : 4,
+        notes: newTopic.notes,
+        markedForExam: false,
+        estimatedHours: 2,
+        actualHours: 0,
+        resources: [],
+        examIds: []
+      };
 
-    saveTopic(topic);
-    loadTopics(selectedSubject);
-    calculateStats(subjects);
-    setShowAddTopicModal(false);
-    setNewTopic({
-      title: '',
-      description: '',
-      difficulty: 'medium',
-      importance: 'medium',
-      notes: ''
-    });
-    toast.success('Argomento aggiunto');
-  };
-
-  const handleUpdateTopic = (topic: Topic) => {
-    saveTopic(topic);
-    loadTopics(selectedSubject!);
-    calculateStats(subjects);
-    setEditingTopic(null);
-    toast.success('Argomento aggiornato');
-  };
-
-  const handleDeleteTopic = (topicId: string) => {
-    if (confirm('Sei sicuro di voler eliminare questo argomento?')) {
-      deleteTopic(topicId);
-      loadTopics(selectedSubject!);
-      calculateStats(subjects);
-      toast.success('Argomento eliminato');
+      await saveTopic(topic);
+      await loadTopics(selectedSubject);
+      await calculateStats(subjects);
+      setShowAddTopicModal(false);
+      setNewTopic({
+        title: '',
+        description: '',
+        difficulty: 'medium',
+        importance: 'medium',
+        notes: ''
+      });
+      toast.success('Argomento aggiunto');
+    } catch (error) {
+      console.error('Error adding topic:', error);
+      toast.error('Errore nell\'aggiunta dell\'argomento');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleToggleCompletion = (topic: Topic) => {
-    const updated = { 
-      ...topic, 
-      completed: !topic.completed,
-      dateStudied: !topic.completed ? new Date().toISOString() : topic.dateStudied
-    };
-    saveTopic(updated);
-    loadTopics(selectedSubject!);
-    calculateStats(subjects);
+  const handleUpdateTopic = async (topic: Topic) => {
+    setSaving(true);
+    try {
+      await saveTopic(topic);
+      await loadTopics(selectedSubject!);
+      await calculateStats(subjects);
+      setEditingTopic(null);
+      toast.success('Argomento aggiornato');
+    } catch (error) {
+      console.error('Error updating topic:', error);
+      toast.error('Errore nell\'aggiornamento dell\'argomento');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleToggleExamMark = (topic: Topic) => {
-    const updated = { ...topic, markedForExam: !topic.markedForExam };
-    saveTopic(updated);
-    loadTopics(selectedSubject!);
-    calculateStats(subjects);
-    toast.success(updated.markedForExam ? 'Argomento marcato per verifica' : 'Argomento rimosso dalla verifica');
+  const handleDeleteTopic = async (topicId: string) => {
+    if (confirm('Sei sicuro di voler eliminare questo argomento?')) {
+      setSaving(true);
+      try {
+        await deleteTopic(topicId);
+        await loadTopics(selectedSubject!);
+        await calculateStats(subjects);
+        toast.success('Argomento eliminato');
+      } catch (error) {
+        console.error('Error deleting topic:', error);
+        toast.error('Errore nell\'eliminazione dell\'argomento');
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
+  const handleToggleCompletion = async (topic: Topic) => {
+    setSaving(true);
+    try {
+      const updated = { 
+        ...topic, 
+        status: topic.status === 'completed' ? 'not_started' : 'completed',
+        completedDate: topic.status !== 'completed' ? new Date().toISOString() : undefined
+      };
+      await saveTopic(updated);
+      await loadTopics(selectedSubject!);
+      await calculateStats(subjects);
+    } catch (error) {
+      console.error('Error toggling completion:', error);
+      toast.error('Errore nell\'aggiornamento dello stato');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleExamMark = async (topic: Topic) => {
+    setSaving(true);
+    try {
+      const updated = { ...topic, markedForExam: !topic.markedForExam };
+      await saveTopic(updated);
+      await loadTopics(selectedSubject!);
+      await calculateStats(subjects);
+      toast.success(updated.markedForExam ? 'Argomento marcato per verifica' : 'Argomento rimosso dalla verifica');
+    } catch (error) {
+      console.error('Error toggling exam mark:', error);
+      toast.error('Errore nell\'aggiornamento del marcatore verifica');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleSubjectExpansion = (subjectName: string) => {
@@ -208,49 +275,73 @@ export default function SubjectsPage() {
     }
   };
 
-  const handleAddSubject = () => {
+  const handleAddSubject = async () => {
     if (!newSubject.name || !newSubject.displayName) {
       toast.error('Inserisci il nome della materia');
       return;
     }
 
-    const subject: Subject = {
-      name: newSubject.name,
-      displayName: newSubject.displayName,
-      professor: newSubject.professor || '',
-      color: newSubject.color || '#3B82F6',
-      currentTopic: '',
-      lastStudied: '',
-      totalHours: 0,
-      averageGrade: 0,
-      topics: [],
-      examGrades: []
-    };
+    setSaving(true);
+    try {
+      const subject: Subject = {
+        name: newSubject.name,
+        displayName: newSubject.displayName,
+        professor: newSubject.professor || '',
+        color: newSubject.color || '#3B82F6',
+        currentTopic: '',
+        lastStudied: '',
+        totalHours: 0,
+        averageGrade: 0,
+        topics: [],
+        examGrades: []
+      };
 
-    saveSubject(subject);
-    loadData();
-    setShowManageSubjectsModal(false);
-    setNewSubject({
-      name: '',
-      displayName: '',
-      professor: '',
-      color: '#3B82F6'
-    });
-    toast.success('Materia aggiunta');
+      await saveSubject(subject);
+      await loadData();
+      setShowManageSubjectsModal(false);
+      setNewSubject({
+        name: '',
+        displayName: '',
+        professor: '',
+        color: '#3B82F6'
+      });
+      toast.success('Materia aggiunta');
+    } catch (error) {
+      console.error('Error adding subject:', error);
+      toast.error('Errore nell\'aggiunta della materia');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleUpdateSubject = (subject: Subject) => {
-    saveSubject(subject);
-    loadData();
-    setEditingSubject(null);
-    toast.success('Materia aggiornata');
+  const handleUpdateSubject = async (subject: Subject) => {
+    setSaving(true);
+    try {
+      await saveSubject(subject);
+      await loadData();
+      setEditingSubject(null);
+      toast.success('Materia aggiornata');
+    } catch (error) {
+      console.error('Error updating subject:', error);
+      toast.error('Errore nell\'aggiornamento della materia');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDeleteSubject = (subjectName: string) => {
+  const handleDeleteSubject = async (subjectName: string) => {
     if (confirm('Sei sicuro di voler eliminare questa materia? Verranno eliminati anche tutti gli argomenti collegati.')) {
-      deleteSubject(subjectName);
-      loadData();
-      toast.success('Materia eliminata');
+      setSaving(true);
+      try {
+        await deleteSubject(subjectName);
+        await loadData();
+        toast.success('Materia eliminata');
+      } catch (error) {
+        console.error('Error deleting subject:', error);
+        toast.error('Errore nell\'eliminazione della materia');
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -271,6 +362,19 @@ export default function SubjectsPage() {
       default: return '⚪';
     }
   };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+            <span className="ml-3 text-gray-600">Caricamento dati...</span>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
