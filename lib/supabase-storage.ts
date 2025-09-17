@@ -388,6 +388,22 @@ export const unmarkTopicsForExam = async (topicIds: string[], examId: string): P
 }
 
 // Homework
+// Helper function to convert database homework to TypeScript Homework
+const dbHomeworkToHomework = (dbHomework: any): Homework => ({
+  id: dbHomework.id,
+  subject: dbHomework.subject,
+  title: dbHomework.title,
+  description: dbHomework.description,
+  dueDate: dbHomework.due_date,  // Convert due_date to dueDate
+  priority: dbHomework.priority,
+  status: dbHomework.status,
+  estimatedHours: dbHomework.estimated_hours,  // Convert estimated_hours to estimatedHours
+  actualHours: dbHomework.actual_hours,  // Convert actual_hours to actualHours
+  attachments: dbHomework.attachments || [],
+  notes: dbHomework.notes,
+  completedDate: dbHomework.completed_date,  // Convert completed_date to completedDate
+})
+
 export const getHomework = async (): Promise<Homework[]> => {
   const supabase = getSupabaseClient()
   const user = await getCurrentUser()
@@ -404,7 +420,7 @@ export const getHomework = async (): Promise<Homework[]> => {
     return []
   }
 
-  return data || []
+  return (data || []).map(dbHomeworkToHomework)
 }
 
 export const saveHomework = async (homework: Homework): Promise<void> => {
@@ -425,13 +441,27 @@ export const saveHomework = async (homework: Homework): Promise<void> => {
     subjectId = subject?.id
   }
 
+  // Convert camelCase to snake_case for database fields
+  const dbHomework = {
+    id: homework.id,
+    subject: homework.subject,
+    title: homework.title,
+    description: homework.description,
+    due_date: homework.dueDate,  // Convert dueDate to due_date
+    priority: homework.priority,
+    status: homework.status,
+    estimated_hours: homework.estimatedHours,  // Convert estimatedHours to estimated_hours
+    actual_hours: homework.actualHours,  // Convert actualHours to actual_hours
+    attachments: homework.attachments || [],
+    notes: homework.notes,
+    completed_date: homework.completedDate,  // Convert completedDate to completed_date
+    user_id: user.id,
+    subject_id: subjectId,
+  }
+
   const { error } = await supabase
     .from('homework')
-    .upsert({
-      ...homework,
-      user_id: user.id,
-      subject_id: subjectId,
-    })
+    .upsert(dbHomework)
 
   if (error) {
     console.error('Error saving homework:', error)
