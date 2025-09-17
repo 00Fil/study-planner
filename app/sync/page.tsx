@@ -14,8 +14,6 @@ import {
   School,
   ClipboardList,
   Info,
-  AlertCircle,
-  CheckCircle,
   Copy,
   ExternalLink,
   FileJson,
