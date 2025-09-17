@@ -26,6 +26,7 @@ const navItems = [
   { href: '/schedule', label: 'Orario', icon: Clock },
   { href: '/smart-plan', label: 'Piano Smart', icon: Sparkles },
   { href: '/agenda', label: 'Agenda', icon: BarChart3 },
+  { href: '/homework', label: 'Compiti', icon: BookOpen },
   { href: '/exams', label: 'Verifiche', icon: GraduationCap },
   { href: '/sync', label: 'Sincronizza', icon: Cloud },
   { href: '/pomodoro', label: 'Timer Studio', icon: Timer },
