@@ -207,6 +207,24 @@ export const deleteSubject = async (subjectName: string): Promise<void> => {
 }
 
 // Topics
+// Helper function to convert database topic to TypeScript Topic
+const dbTopicToTopic = (dbTopic: any): Topic => ({
+  id: dbTopic.id,
+  subjectName: dbTopic.subject_name,
+  name: dbTopic.name,
+  description: dbTopic.description,
+  status: dbTopic.status,
+  priority: dbTopic.priority,
+  difficulty: dbTopic.difficulty,
+  estimatedHours: dbTopic.estimated_hours,
+  actualHours: dbTopic.actual_hours,  // Convert actual_hours to actualHours
+  markedForExam: dbTopic.marked_for_exam,  // Convert marked_for_exam to markedForExam
+  examIds: dbTopic.exam_ids || [],
+  notes: dbTopic.notes,
+  resources: dbTopic.resources || [],
+  completedDate: dbTopic.completed_date,
+})
+
 export const getTopics = async (): Promise<Topic[]> => {
   const supabase = getSupabaseClient()
   const user = await getCurrentUser()
@@ -223,7 +241,7 @@ export const getTopics = async (): Promise<Topic[]> => {
     return []
   }
 
-  return data || []
+  return (data || []).map(dbTopicToTopic)
 }
 
 export const getTopicsBySubject = async (subjectName: string): Promise<Topic[]> => {
@@ -243,7 +261,7 @@ export const getTopicsBySubject = async (subjectName: string): Promise<Topic[]> 
     return []
   }
 
-  return data || []
+  return (data || []).map(dbTopicToTopic)
 }
 
 export const saveTopic = async (topic: Topic): Promise<void> => {
@@ -261,13 +279,29 @@ export const saveTopic = async (topic: Topic): Promise<void> => {
 
   if (!subject) throw new Error('Subject not found')
 
+  // Convert camelCase to snake_case for database fields
+  const dbTopic = {
+    id: topic.id,
+    subject_name: topic.subjectName,
+    name: topic.name,
+    description: topic.description,
+    status: topic.status,
+    priority: topic.priority,
+    difficulty: topic.difficulty,
+    estimated_hours: topic.estimatedHours,
+    actual_hours: topic.actualHours,  // Convert actualHours to actual_hours
+    marked_for_exam: topic.markedForExam,  // Convert markedForExam to marked_for_exam
+    exam_ids: topic.examIds || [],
+    notes: topic.notes,
+    resources: topic.resources || [],
+    completed_date: topic.completedDate,
+    user_id: user.id,
+    subject_id: subject.id,
+  }
+
   const { error } = await supabase
     .from('topics')
-    .upsert({
-      ...topic,
-      user_id: user.id,
-      subject_id: subject.id,
-    })
+    .upsert(dbTopic)
 
   if (error) {
     console.error('Error saving topic:', error)
