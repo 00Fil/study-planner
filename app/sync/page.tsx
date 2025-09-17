@@ -14,6 +14,8 @@ import {
   School,
   ClipboardList,
   Info,
+  AlertCircle,
+  CheckCircle,
   Copy,
   ExternalLink,
   FileJson,
@@ -149,6 +151,13 @@ export default function SyncPage() {
 
   // Handle auto sync trigger
   const handleAutoSync = async () => {
+    // Check if we're on Vercel deployment
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+      toast.error('Auto-sync non disponibile su Vercel. Usa il metodo manuale copia-incolla.');
+      setActiveTab('manual');
+      return;
+    }
+    
     if (!isAuthenticated) {
       toast.error('Effettua prima il login per sincronizzare');
       return;
