@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export function AuthForm() {
   const [isLogin, setIsLogin] = useState(true)
@@ -10,8 +11,30 @@ export function AuthForm() {
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
 
   const supabase = createClient()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirectTo') || '/'
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const checkUser = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          router.push(redirectTo)
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error)
+      } finally {
+        setCheckingAuth(false)
+      }
+    }
+    
+    checkUser()
+  }, [supabase, router, redirectTo])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,31 +43,49 @@ export function AuthForm() {
     try {
       if (isLogin) {
         // Login
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         })
         
         if (error) throw error
         
-        toast.success('Login effettuato con successo!')
+        if (data.session) {
+          toast.success('Accesso effettuato con successo!')
+          // Wait a moment for the auth state to propagate
+          setTimeout(() => {
+            router.refresh()
+            router.push(redirectTo)
+          }, 100)
+        }
       } else {
         // Sign up
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               full_name: fullName,
             },
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
           },
         })
         
         if (error) throw error
         
-        toast.success('Registrazione completata! Controlla la tua email per confermare l\'account.')
+        if (data.user && !data.session) {
+          toast.success('Registrazione completata! Controlla la tua email per confermare l\'account.')
+        } else if (data.session) {
+          // Auto-confirmed email (for test environments)
+          toast.success('Registrazione completata!')
+          setTimeout(() => {
+            router.refresh()
+            router.push(redirectTo)
+          }, 100)
+        }
       }
     } catch (error: any) {
+      console.error('Auth error:', error)
       toast.error(error.message || 'Si è verificato un errore')
     } finally {
       setLoading(false)
@@ -56,7 +97,7 @@ export function AuthForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
         },
       })
       
@@ -64,6 +105,17 @@ export function AuthForm() {
     } catch (error: any) {
       toast.error(error.message || 'Errore durante il login con Google')
     }
+  }
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Verifica autenticazione...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
