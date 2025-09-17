@@ -149,9 +149,12 @@ export default function SyncPage() {
 
   // Handle auto sync trigger
   const handleAutoSync = async () => {
-    // Check if we're on Vercel deployment
-    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
-      toast.error('Auto-sync non disponibile su Vercel. Usa il metodo manuale copia-incolla.');
+    // Check if we're on deployment platforms that don't support scraping
+    if (typeof window !== 'undefined' && 
+        (window.location.hostname.includes('vercel.app') || 
+         window.location.hostname.includes('onrender.com') ||
+         window.location.hostname.includes('.render.com'))) {
+      toast.error('La sincronizzazione automatica non è disponibile su piattaforme cloud per motivi di sicurezza. Usa il metodo copia-incolla dalla sezione manuale.');
       setActiveTab('manual');
       return;
     }
@@ -1003,6 +1006,32 @@ Informatica: 7.5 (08/01/2025)`;
 
             {activeTab === 'auto' && (
               <div className="space-y-6">
+                {/* Platform Warning for Cloud Deployments */}
+                {typeof window !== 'undefined' && 
+                 (window.location.hostname.includes('vercel.app') || 
+                  window.location.hostname.includes('onrender.com') ||
+                  window.location.hostname.includes('.render.com')) && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex gap-3">
+                      <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-medium text-yellow-900 mb-2">
+                          Sincronizzazione automatica non disponibile su cloud
+                        </p>
+                        <p className="text-sm text-yellow-800 mb-3">
+                          Per motivi di sicurezza, ClasseViva blocca l'accesso automatizzato dalle piattaforme cloud.
+                          Puoi utilizzare una delle seguenti alternative:
+                        </p>
+                        <ul className="text-sm text-yellow-800 space-y-1 list-disc list-inside">
+                          <li>Usa il metodo <button onClick={() => setActiveTab('manual')} className="underline font-medium">Copia-Incolla</button> (consigliato)</li>
+                          <li>Esporta i dati da ClasseViva e usa l'<button onClick={() => setActiveTab('file')} className="underline font-medium">import da file</button></li>
+                          <li>Scarica l'app in locale per la sincronizzazione automatica</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {/* Authentication Section */}
                 <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-6">
                   <div className="flex items-center justify-between mb-4">
