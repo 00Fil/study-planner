@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import AppLayout from '@/components/AppLayout';
 import { 
   BookOpen, 
@@ -160,7 +161,7 @@ export default function SubjectsPage() {
     setSaving(true);
     try {
       const topic: Topic = {
-        id: Date.now().toString(),
+        id: uuidv4(),
         subjectName: selectedSubject,
         name: newTopic.title!,
         description: newTopic.description,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import AppLayout from '@/components/AppLayout';
 import { Plus, Calendar, Clock, AlertCircle, Edit2, Trash2, CheckCircle, ChevronDown, Check, X, Target, BookOpen, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -81,7 +82,7 @@ export default function ExamsPage() {
     setSaving(true);
     try {
       const exam: Exam = {
-        id: editingExam?.id || Date.now().toString(),
+        id: editingExam?.id || uuidv4(),
         subject: formData.subject,
         date: formData.date,
         type: formData.type,

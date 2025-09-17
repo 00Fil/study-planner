@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import AppLayout from '@/components/AppLayout';
 import './calendar-animations.css';
 import {
@@ -131,7 +132,7 @@ export default function HomeworkPage() {
     setSaving(true);
     try {
       const homeworkData: Homework = {
-        id: editingHomework?.id || `homework-${Date.now()}`,
+        id: editingHomework?.id || uuidv4(),
         subject: formData.subject!,
         title: formData.description!,
         description: formData.notes,
