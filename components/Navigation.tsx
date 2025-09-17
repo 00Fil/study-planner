@@ -16,29 +16,43 @@ import {
   Brain,
   Clock,
   Sparkles,
-  Cloud
+  Cloud,
+  MoreVertical,
+  ClipboardList,
+  User
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: Home },
-  { href: '/schedule', label: 'Orario', icon: Clock },
-  { href: '/smart-plan', label: 'Piano Smart', icon: Sparkles },
-  { href: '/agenda', label: 'Agenda', icon: BarChart3 },
-  { href: '/homework', label: 'Compiti', icon: BookOpen },
-  { href: '/exams', label: 'Verifiche', icon: GraduationCap },
-  { href: '/sync', label: 'Sincronizza', icon: Cloud },
-  { href: '/pomodoro', label: 'Timer Studio', icon: Timer },
-  { href: '/subjects', label: 'Materie', icon: BookOpen },
-  { href: '/methods', label: 'Metodi', icon: Brain },
-  { href: '/stats', label: 'Statistiche', icon: BarChart3 },
-  { href: '/goals', label: 'Obiettivi', icon: Target },
+  { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home, showInBottom: true, priority: 1 },
+  { href: '/homework', label: 'Compiti', mobileLabel: 'Compiti', icon: ClipboardList, showInBottom: true, priority: 2 },
+  { href: '/exams', label: 'Verifiche', mobileLabel: 'Verifiche', icon: GraduationCap, showInBottom: true, priority: 3 },
+  { href: '/pomodoro', label: 'Timer Studio', mobileLabel: 'Studio', icon: Timer, showInBottom: true, priority: 4 },
+  { href: '/schedule', label: 'Orario', mobileLabel: 'Orario', icon: Clock, showInBottom: false },
+  { href: '/smart-plan', label: 'Piano Smart', mobileLabel: 'Smart', icon: Sparkles, showInBottom: false },
+  { href: '/agenda', label: 'Agenda', mobileLabel: 'Agenda', icon: Calendar, showInBottom: false },
+  { href: '/subjects', label: 'Materie', mobileLabel: 'Materie', icon: BookOpen, showInBottom: false },
+  { href: '/sync', label: 'Sincronizza', mobileLabel: 'Sync', icon: Cloud, showInBottom: false },
+  { href: '/methods', label: 'Metodi di Studio', mobileLabel: 'Metodi', icon: Brain, showInBottom: false },
+  { href: '/stats', label: 'Statistiche', mobileLabel: 'Stats', icon: BarChart3, showInBottom: false },
+  { href: '/goals', label: 'Obiettivi', mobileLabel: 'Goals', icon: Target, showInBottom: false },
 ];
+
+const bottomNavItems = navItems.filter(item => item.showInBottom).sort((a, b) => a.priority - b.priority);
 
 export default function Navigation() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <>
@@ -95,18 +109,25 @@ export default function Navigation() {
 
       {/* Mobile Navigation */}
       <div className="md:hidden">
-        {/* Mobile Header */}
-        <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50">
+        {/* Mobile Header with improved styling */}
+        <header className={cn(
+          "fixed top-0 left-0 right-0 h-14 bg-white z-50 transition-all duration-200",
+          scrolled ? "shadow-md border-b border-gray-100" : "border-b border-gray-200"
+        )}>
           <div className="flex items-center justify-between h-full px-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm">
                 <GraduationCap className="w-5 h-5 text-white" />
               </div>
-              <span className="text-lg font-bold text-gray-900">Study Planner</span>
+              <div className="flex flex-col">
+                <span className="text-base font-bold text-gray-900 leading-tight">Study Planner</span>
+                <span className="text-xs text-gray-500 leading-tight">Il tuo assistente studio</span>
+              </div>
             </div>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-2 -mr-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              aria-label="Menu"
             >
               {mobileMenuOpen ? (
                 <X className="w-6 h-6 text-gray-700" />
@@ -163,10 +184,10 @@ export default function Navigation() {
           </div>
         )}
 
-        {/* Mobile Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-200 z-30">
-          <div className="flex items-center justify-around h-full">
-            {navItems.slice(0, 5).map((item) => {
+        {/* Enhanced Mobile Bottom Navigation */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-inset-bottom">
+          <div className="flex items-center justify-around h-16 px-2">
+            {bottomNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
               
@@ -175,17 +196,37 @@ export default function Navigation() {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 px-3 py-2",
+                    "flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg transition-all relative flex-1 max-w-[80px]",
                     isActive
                       ? "text-blue-600"
-                      : "text-gray-500"
+                      : "text-gray-500 active:bg-gray-50"
                   )}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-xs">{item.label.split(' ')[0]}</span>
+                  {isActive && (
+                    <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-full" />
+                  )}
+                  <Icon className={cn(
+                    "transition-all",
+                    isActive ? "w-6 h-6" : "w-5 h-5"
+                  )} />
+                  <span className={cn(
+                    "text-xs font-medium",
+                    isActive && "text-blue-600"
+                  )}>
+                    {item.mobileLabel}
+                  </span>
                 </Link>
               );
             })}
+            
+            {/* More button */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg text-gray-500 active:bg-gray-50 flex-1 max-w-[80px]"
+            >
+              <MoreVertical className="w-5 h-5" />
+              <span className="text-xs font-medium">Altro</span>
+            </button>
           </div>
         </nav>
       </div>

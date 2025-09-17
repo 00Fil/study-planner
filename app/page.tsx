@@ -285,12 +285,12 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="max-w-7xl mx-auto space-y-4">
-        {/* Top Info Bar - Prossima Lezione */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            {/* Current/Next Lesson Info */}
-            <div className="flex items-center gap-6">
+      <div className="max-w-7xl mx-auto space-y-3 md:space-y-4">
+        {/* Top Info Bar - Responsive for mobile */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 md:p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* Current/Next Lesson Info - Mobile optimized */}
+            <div className="flex-1">
               {isInClass && currentLesson ? (
                 <div className="flex items-center gap-3">
                   <div className="relative">
@@ -345,39 +345,39 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Quick Stats */}
-            <div className="flex items-center gap-4">
+            {/* Quick Stats - Mobile grid layout */}
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:gap-4">
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{stats?.totalHours || 0}h</p>
-                <p className="text-xs text-gray-500">Studio totale</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">{stats?.totalHours || 0}h</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Studio totale</p>
               </div>
-              <div className="h-10 w-px bg-gray-200"></div>
+              <div className="hidden sm:block h-10 w-px bg-gray-200"></div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-orange-600">{stats?.studyStreak || 0}</p>
-                <p className="text-xs text-gray-500">Giorni streak</p>
+                <p className="text-xl sm:text-2xl font-bold text-orange-600">{stats?.studyStreak || 0}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Giorni streak</p>
               </div>
-              <div className="h-10 w-px bg-gray-200"></div>
+              <div className="hidden sm:block h-10 w-px bg-gray-200"></div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{stats?.averageGrade?.toFixed(1) || '-'}</p>
-                <p className="text-xs text-gray-500">Media voti</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-600">{stats?.averageGrade?.toFixed(1) || '-'}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Media voti</p>
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="flex items-center gap-2">
+            {/* Quick Actions - Hidden on mobile, shown in bottom nav */}
+            <div className="hidden sm:flex items-center gap-2">
               <Link 
                 href="/schedule"
-                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+                className="btn-touch bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Calendar className="w-4 h-4" />
-                Orario
+                <span className="hidden lg:inline">Orario</span>
               </Link>
               <Link 
                 href="/pomodoro"
-                className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
+                className="btn-touch bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Timer className="w-4 h-4" />
-                Studia
+                <span className="hidden lg:inline">Studia</span>
               </Link>
             </div>
           </div>
